@@ -1,0 +1,280 @@
+/* main.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+TC:wght@400;600;800&display=swap');
+
+:root {
+  /* Colors - Light Theme (Default) */
+  --color-bg: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-text-primary: #1E293B;
+  --color-text-secondary: #64748B;
+  --color-accent: #1D9E75;
+  --color-primary: #1A3C6E;
+  --color-primary-mid: #2E6DB4;
+  --color-danger: #EF4444;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+
+  /* Heatmap Colors */
+  --color-heatmap-1: #4ade80;
+  --color-heatmap-2: #a3e635;
+  --color-heatmap-3: #facc15;
+  --color-heatmap-4: #fb923c;
+  --color-heatmap-5: #f87171;
+
+  /* Spacing */
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+
+  /* Typography */
+  --font-family: 'Inter', 'Noto Sans TC', sans-serif;
+  --font-size-base: 16px;
+
+  /* Border Radius */
+  --radius-card: 12px;
+  --radius-badge: 8px;
+  --radius-btn: 8px;
+  --radius-input: 6px;
+
+  /* Z-Index */
+  --z-modal: 100;
+  --z-overlay: 90;
+  --z-tooltip: 80;
+  --z-nav: 70;
+
+  /* Borders */
+  --border-color: rgba(0, 0, 0, 0.12);
+  --border-color-hover: rgba(0, 0, 0, 0.3);
+}
+
+/* Dark Theme Overrides */
+.theme-dark {
+  --color-bg: #0F172A;
+  --color-surface: #1E293B;
+  --color-text-primary: #F8FAFC;
+  --color-text-secondary: #94A3B8;
+  --border-color: rgba(255, 255, 255, 0.12);
+  --border-color-hover: rgba(255, 255, 255, 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.theme-light) {
+    --color-bg: #0F172A;
+    --color-surface: #1E293B;
+    --color-text-primary: #F8FAFC;
+    --color-text-secondary: #94A3B8;
+    --border-color: rgba(255, 255, 255, 0.12);
+    --border-color-hover: rgba(255, 255, 255, 0.3);
+  }
+}
+
+/* Base Styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: var(--font-size-base);
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+  min-height: 100vh;
+}
+
+/* Global Layout (Mobile First) */
+.container {
+  width: 100%;
+  padding: var(--spacing-md);
+  margin: 0 auto;
+}
+
+/* Tab Panel Logic */
+.tab-panel[hidden] {
+  display: none !important;
+}
+
+/* Responsive Breakpoints */
+@media (min-width: 768px) {
+  .container {
+    padding: var(--spacing-lg);
+  }
+}
+
+@media (min-width: 1280px) {
+  .container {
+    max-width: 1280px;
+  }
+}
+
+/* Utility Layouts */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+.gap-sm { gap: var(--spacing-sm); }
+.gap-md { gap: var(--spacing-md); }
+.gap-lg { gap: var(--spacing-lg); }
+
+.grid { display: grid; }
+
+/* Dashboard UI Layout Enhancements */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  border: 0.5px solid var(--border-color);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+}
+
+.app-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  background: linear-gradient(45deg, var(--color-primary), var(--color-accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0;
+}
+
+.app-nav {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.nav-btn, .theme-btn, .btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-btn);
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.nav-btn:hover, .theme-btn:hover {
+  background: rgba(0,0,0,0.05);
+}
+.theme-dark .nav-btn:hover, .theme-dark .theme-btn:hover {
+  background: rgba(255,255,255,0.1);
+}
+.nav-btn.active {
+  background: var(--color-primary);
+  color: #fff;
+}
+.btn--primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+.btn--primary:hover {
+  opacity: 0.9;
+}
+
+.tracking-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: var(--spacing-lg);
+}
+
+@media (max-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  padding: var(--spacing-lg);
+  border: 0.5px solid var(--border-color);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+.mt-md { margin-top: var(--spacing-md); }
+.mt-lg { margin-top: var(--spacing-lg); }
+
+/* Flight Row UI Enhancements */
+.flight-row {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  border: 0.5px solid var(--border-color);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.flight-row:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  border-color: var(--color-primary);
+}
+.theme-dark .flight-row:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.flight-row--expanded {
+  border-color: var(--color-primary);
+}
+
+/* Trip.com Style Search Bar */
+.trip-search-bar {
+  display: flex;
+  background: var(--color-surface);
+  padding: 8px 12px;
+  border-radius: 32px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  margin-bottom: var(--spacing-lg);
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+.theme-dark .trip-search-bar {
+  background: #1e293b; /* Distinct background for dark mode */
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.trip-search-bar input, .trip-search-bar select {
+  flex: 1;
+  min-width: 120px;
+  border: none;
+  background: transparent;
+  padding: 8px 16px;
+  font-size: 1rem;
+  font-family: inherit;
+  outline: none;
+  color: var(--color-text-primary);
+}
+.trip-search-bar .search-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border-color);
+}
+.trip-search-bar button {
+  border-radius: 24px;
+  padding: 10px 32px;
+  font-size: 1rem;
+  font-weight: bold;
+}

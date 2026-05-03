@@ -1,0 +1,273 @@
+/* components.css */
+
+/* Metric Card */
+.metric-card {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-card);
+  padding: var(--spacing-md);
+  border: 0.5px solid var(--border-color);
+  transition: border-color 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.metric-card:hover {
+  border-color: var(--border-color-hover);
+}
+
+.metric-card__label {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.metric-card__value {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: var(--color-text-primary);
+}
+
+.metric-card__delta {
+  font-size: 0.875rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.metric-card__delta--positive {
+  color: var(--color-success);
+}
+
+.metric-card__delta--negative {
+  color: var(--color-danger);
+}
+
+/* Tracking Pill */
+.tracking-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  background-color: var(--color-surface);
+  border: 0.5px solid var(--border-color);
+  border-radius: 999px;
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+  gap: 8px;
+}
+
+.tracking-pill:hover {
+  border-color: var(--border-color-hover);
+}
+
+.tracking-pill--active {
+  background-color: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.tracking-pill__close {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.tracking-pill__close:hover {
+  opacity: 1;
+}
+
+/* Slider Group */
+.slider-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: var(--spacing-md);
+}
+
+.slider-group__label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.slider-group__input {
+  width: 100%;
+  accent-color: var(--color-accent);
+}
+
+.slider-group__value {
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+/* Flight Row */
+.flight-row {
+  background-color: var(--color-surface);
+  border: 0.5px solid var(--border-color);
+  border-radius: var(--radius-card);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.flight-row:hover {
+  border-color: var(--border-color-hover);
+}
+
+.flight-row__detail {
+  display: none;
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 0.5px solid var(--border-color);
+}
+
+.flight-row--expanded .flight-row__detail {
+  display: block;
+}
+
+/* Compare Modal */
+.compare-modal[hidden] {
+  display: none !important;
+}
+.compare-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.compare-modal__overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: var(--z-overlay);
+}
+
+.compare-modal__content {
+  position: relative;
+  z-index: var(--z-modal);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-card);
+  padding: var(--spacing-lg);
+  max-width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* Booking Advice Banner */
+.advice-banner {
+  padding: var(--spacing-md);
+  border-radius: var(--radius-card);
+  margin-bottom: var(--spacing-md);
+  font-weight: 500;
+}
+
+.advice-banner--book {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+}
+
+.advice-banner--wait {
+  background-color: rgba(245, 158, 11, 0.1);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning);
+}
+
+.advice-banner--avoid {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+}
+
+/* Badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-badge);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.badge--ai {
+  background-color: rgba(46, 109, 180, 0.1);
+  color: var(--color-primary-mid);
+}
+
+.badge--ai-warn {
+  background-color: rgba(245, 158, 11, 0.1);
+  color: var(--color-warning);
+}
+
+.badge--ai-low {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--color-danger);
+}
+
+/* Skeleton Loader */
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+.skeleton {
+  background-color: var(--border-color);
+  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.skeleton--card {
+  height: 100px;
+  border-radius: var(--radius-card);
+}
+
+.skeleton--row {
+  height: 60px;
+  border-radius: var(--radius-card);
+  margin-bottom: var(--spacing-sm);
+}
+
+.skeleton--chart {
+  height: 300px;
+  border-radius: var(--radius-card);
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: var(--spacing-lg);
+  right: var(--spacing-lg);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-card);
+  color: #fff;
+  z-index: var(--z-modal);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.toast--error {
+  background-color: var(--color-danger);
+}
+
+.toast--success {
+  background-color: var(--color-success);
+}
+
+.toast--warning {
+  background-color: var(--color-warning);
+  color: #000;
+}

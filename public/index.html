@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travel Intel Dashboard</title>
+    
+    <style>
+        :root {
+            --color-bg: #FFFFFF;
+            --color-surface: #F5F5F5;
+            --color-text-primary: #333333;
+            --color-text-secondary: #666666;
+            --color-accent: #1D9E75;
+            --color-primary: #1A3C6E;
+            --color-primary-mid: #2E6DB4;
+            --color-danger: #D32F2F;
+            --color-success: #388E3C;
+            --color-warning: #F57C00;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --font-size-base: 16px;
+            --radius-card: 12px;
+            --radius-badge: 8px;
+            --z-modal: 100;
+            --z-overlay: 90;
+            --z-tooltip: 80;
+            --z-nav: 70;
+        }
+    </style>
+
+    <!-- CSS 設計系統載入 -->
+    <link rel="stylesheet" href="/styles/main.css">
+    <link rel="stylesheet" href="/styles/components.css">
+    <link rel="stylesheet" href="/styles/charts.css">
+</head>
+<body>
+  <div class="container">
+    <header class="app-header">
+      <h1 class="app-title">Travel Intel</h1>
+      <nav class="app-nav">
+          <button id="nav-dashboard" class="nav-btn active">Dashboard</button>
+          <button id="nav-flights" class="nav-btn">Flights</button>
+          <button id="nav-price-history" class="nav-btn">Price History</button>
+      </nav>
+      <div>
+        <button id="lang-toggle" class="theme-btn">繁體中文</button>
+        <button id="theme-toggle" class="theme-btn">🌗</button>
+      </div>
+    </header>
+
+    <div id="toast-container"></div>
+
+    <!-- Dashboard Tab -->
+    <section id="tab-dashboard" class="tab-panel">
+        <div class="tracking-header">
+          <div class="flex gap-md items-center">
+            <h2 id="dashboard-title" style="margin:0; font-size:1.25rem; font-weight:800; color:var(--color-text-primary);"></h2>
+            <div id="tracking-tabs" class="flex gap-sm" style="flex-wrap:wrap;"></div>
+          </div>
+          <button id="tracking-add-btn" class="btn btn--primary" data-i18n="add_tracking">+ Add Tracking</button>
+        </div>
+
+        <div id="dashboard-search-bar" class="trip-search-bar">
+          <input type="text" id="dash-origin" placeholder="Origin (e.g. TPE)">
+          <div class="search-divider"></div>
+          <input type="text" id="dash-dest" placeholder="Destination (e.g. NRT)">
+          <div class="search-divider"></div>
+          <input type="date" id="dash-start">
+          <div class="search-divider"></div>
+          <input type="date" id="dash-end">
+          <button id="dash-search-btn" class="btn btn--primary" data-i18n="search">Search</button>
+        </div>
+
+        <div class="metrics-grid">
+            <div id="metric-flight-price"></div>
+            <div id="metric-hotel-price"></div>
+            <div id="metric-weather"></div>
+            <div id="metric-fun-score"></div>
+        </div>
+
+        <div class="dashboard-grid">
+           <div class="panel" id="slider-container"></div>
+           <div class="panel">
+               <canvas id="chart-trend"></canvas>
+           </div>
+        </div>
+
+        <div class="panel mt-lg">
+            <div id="chart-heatmap"></div>
+        </div>
+    </section>
+
+    <!-- Flights Tab -->
+    <section id="tab-flights" class="tab-panel" hidden>
+        <div id="flight-results"></div>
+        <button id="compare-btn" class="btn btn--primary" data-i18n="compare">Compare Selected</button>
+        <div id="advice-banner" style="margin-top: 1rem;"></div>
+    </section>
+
+    <!-- Price History Tab -->
+    <section id="tab-price-history" class="tab-panel" hidden>
+        <div id="ph-advice-banner" style="margin-bottom: 1rem;"></div>
+        <div class="panel mt-md"><canvas id="chart-yoy"></canvas></div>
+        <div class="panel mt-md"><canvas id="chart-fullyear"></canvas></div>
+    </section>
+  </div>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+    <!-- 全域 JS 命名空間初始化 -->
+    <script>
+        window.TravelIntel = {
+            app: {},
+            dashboard: {},
+            charts: {},
+            flightSearch: {},
+            priceHistory: {}
+        };
+    </script>
+
+    <!-- 模組載入 (依順序) -->
+    <script src="/js/app.js"></script>
+    <script src="/js/dashboard.js"></script>
+    <script src="/js/charts.js"></script>
+    <script src="/js/flightSearch.js"></script>
+    <script src="/js/priceHistory.js"></script>
+</body>
+</html>

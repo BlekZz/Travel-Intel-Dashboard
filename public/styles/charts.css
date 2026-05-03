@@ -1,0 +1,75 @@
+/* charts.css */
+
+/* Chart Containers */
+.chart-container {
+  position: relative;
+  width: 100%;
+  margin-bottom: var(--spacing-lg);
+  background-color: var(--color-surface);
+  border: 0.5px solid var(--border-color);
+  border-radius: var(--radius-card);
+  padding: var(--spacing-md);
+}
+
+.chart-container--dual-axis {
+  height: 400px;
+}
+
+.chart-container--yoy {
+  height: 350px;
+}
+
+/* Calendar Heatmap Container */
+.chart-container--heatmap {
+  display: flex;
+  flex-direction: column;
+  overflow-x: auto;
+}
+
+.chart-container--heatmap .heatmap-grid {
+  display: grid;
+  /* 52 weeks (columns) x 7 days (rows) */
+  grid-template-columns: repeat(52, minmax(20px, 1fr));
+  grid-template-rows: repeat(7, 20px);
+  gap: 4px;
+  margin-top: var(--spacing-md);
+}
+
+.heatmap-cell {
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  color: rgba(0,0,0,0.6);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.heatmap-cell:hover {
+  transform: scale(1.1);
+  z-index: 10;
+}
+
+/* Heatmap Colors */
+.heatmap-cell--1 { background-color: var(--color-heatmap-1); }
+.heatmap-cell--2 { background-color: var(--color-heatmap-2); }
+.heatmap-cell--3 { background-color: var(--color-heatmap-3); }
+.heatmap-cell--4 { background-color: var(--color-heatmap-4); }
+.heatmap-cell--5 { background-color: var(--color-heatmap-5); color: #fff; }
+
+/* Chart.js Tooltip Override */
+#chartjs-tooltip {
+  opacity: 1;
+  position: absolute;
+  background: var(--color-surface) !important;
+  color: var(--color-text-primary) !important;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-card);
+  pointer-events: none;
+  transform: translate(-50%, 0);
+  transition: all .1s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  padding: var(--spacing-sm);
+  z-index: var(--z-tooltip);
+}
