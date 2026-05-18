@@ -47,7 +47,6 @@
   --border-color-hover: rgba(0, 0, 0, 0.3);
 }
 
-/* Dark Theme Overrides */
 .theme-dark {
   --color-bg: #0F172A;
   --color-surface: #1E293B;
@@ -68,35 +67,59 @@
   }
 }
 
-/* Base Styles */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+html {
   font-size: var(--font-size-base);
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: 1rem;
+  line-height: 1.5;
   background-color: var(--color-bg);
   color: var(--color-text-primary);
   transition: background-color 0.2s ease, color 0.2s ease;
   min-height: 100vh;
 }
 
-/* Global Layout (Mobile First) */
+a {
+  color: var(--color-primary-mid);
+}
+
+a:hover {
+  color: var(--color-primary);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
 .container {
   width: 100%;
   padding: var(--spacing-md);
   margin: 0 auto;
 }
 
-/* Tab Panel Logic */
+.tab-panel {
+  display: block;
+}
+
 .tab-panel[hidden] {
   display: none !important;
 }
 
-/* Responsive Breakpoints */
 @media (min-width: 768px) {
   .container {
     padding: var(--spacing-lg);
@@ -109,7 +132,6 @@ body {
   }
 }
 
-/* Utility Layouts */
 .flex { display: flex; }
 .flex-col { flex-direction: column; }
 .items-center { align-items: center; }
@@ -118,14 +140,13 @@ body {
 .gap-sm { gap: var(--spacing-sm); }
 .gap-md { gap: var(--spacing-md); }
 .gap-lg { gap: var(--spacing-lg); }
-
 .grid { display: grid; }
 
-/* Dashboard UI Layout Enhancements */
 .app-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--spacing-md);
   margin-bottom: var(--spacing-lg);
   padding: var(--spacing-md) var(--spacing-lg);
   background: var(--color-surface);
@@ -134,55 +155,90 @@ body {
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
 }
 
-.app-title {
-  font-size: 1.5rem;
+.app-title,
+#dashboard-title {
+  font-size: clamp(1.25rem, 2vw, 1.75rem);
   font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.app-title {
   background: linear-gradient(45deg, var(--color-primary), var(--color-accent));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  margin: 0;
+}
+
+#dashboard-title {
+  min-width: 0;
+  color: var(--color-text-primary);
 }
 
 .app-nav {
   display: flex;
   gap: var(--spacing-sm);
+  flex-wrap: wrap;
 }
 
 .nav-btn, .theme-btn, .btn {
   padding: 8px 16px;
   border-radius: var(--radius-btn);
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--color-text-primary);
   cursor: pointer;
   font-weight: 600;
   transition: all 0.2s;
 }
-.nav-btn:hover, .theme-btn:hover {
+
+.nav-btn:hover, .theme-btn:hover, .btn:hover {
   background: rgba(0,0,0,0.05);
 }
-.theme-dark .nav-btn:hover, .theme-dark .theme-btn:hover {
+
+.theme-dark .nav-btn:hover,
+.theme-dark .theme-btn:hover,
+.theme-dark .btn:hover {
   background: rgba(255,255,255,0.1);
 }
-.nav-btn.active {
+
+.nav-btn.active,
+.nav-btn[aria-selected='true'] {
   background: var(--color-primary);
   color: #fff;
 }
+
 .btn--primary {
   background: var(--color-primary);
   color: #fff;
 }
+
 .btn--primary:hover {
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
 .tracking-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: var(--spacing-md);
   flex-wrap: wrap;
   gap: var(--spacing-md);
+}
+
+.tracking-header > .flex {
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 480px;
+}
+
+#tracking-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: 2.5rem;
+  max-width: 100%;
 }
 
 .metrics-grid {
@@ -194,7 +250,7 @@ body {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 1fr 2fr;
+  grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);
   gap: var(--spacing-lg);
 }
 
@@ -212,12 +268,16 @@ body {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
   display: flex;
   flex-direction: column;
+  min-width: 0;
+}
+
+.panel > * + * {
+  margin-top: var(--spacing-md);
 }
 
 .mt-md { margin-top: var(--spacing-md); }
 .mt-lg { margin-top: var(--spacing-lg); }
 
-/* Flight Row UI Enhancements */
 .flight-row {
   background: var(--color-surface);
   border-radius: var(--radius-card);
@@ -227,19 +287,21 @@ body {
   transition: all 0.2s ease;
   cursor: pointer;
 }
+
 .flight-row:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0,0,0,0.05);
   border-color: var(--color-primary);
 }
+
 .theme-dark .flight-row:hover {
   box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
+
 .flight-row--expanded {
   border-color: var(--color-primary);
 }
 
-/* Trip.com Style Search Bar */
 .trip-search-bar {
   display: flex;
   background: var(--color-surface);
@@ -252,11 +314,14 @@ body {
   border: 1px solid var(--border-color);
   flex-wrap: wrap;
 }
+
 .theme-dark .trip-search-bar {
-  background: #1e293b; /* Distinct background for dark mode */
+  background: #1e293b;
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
 }
-.trip-search-bar input, .trip-search-bar select {
+
+.trip-search-bar input,
+.trip-search-bar select {
   flex: 1;
   min-width: 120px;
   border: none;
@@ -267,14 +332,32 @@ body {
   outline: none;
   color: var(--color-text-primary);
 }
+
 .trip-search-bar .search-divider {
   width: 1px;
   height: 24px;
   background: var(--border-color);
 }
+
 .trip-search-bar button {
   border-radius: 24px;
   padding: 10px 32px;
   font-size: 1rem;
   font-weight: bold;
+}
+
+@media (max-width: 767px) {
+  .app-header {
+    padding: var(--spacing-md);
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .tracking-header {
+    align-items: stretch;
+  }
+
+  #tracking-tabs {
+    width: 100%;
+  }
 }

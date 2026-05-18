@@ -1,52 +1,309 @@
 (function() {
+  const DEFAULT_DESTINATION = 'NRT';
+  const POPUP_ID = 'chart-heatmap-popover';
+  const LEGEND_LEVELS = [1, 2, 3, 4, 5];
+
   let trendChartInstance = null;
-  let activeDestination = 'NRT';
+  let activeDestination = DEFAULT_DESTINATION;
   let heatmapType = 'outbound';
-  
-  function getCssColor(variable) {
-    return getComputedStyle(document.documentElement).getPropertyValue(variable).trim();
+  let lastHeatmapPayload = null;
+
+  function getApp() {
+    return (window.TravelIntel && window.TravelIntel.app) || {};
   }
 
-  function getChartConfig() {
-    const isReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function isChinese() {
+    const app = getApp();
+    if (typeof app.isChinese === 'function') return app.isChinese();
+    return (document.documentElement.lang || '').toLowerCase().startsWith('zh');
+  }
+
+  function t(en, zh) {
+    return isChinese() ? zh : en;
+  }
+
+  function getCssColor(variable, fallback = '') {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(variable).trim();
+    return value || fallback;
+  }
+
+  function prefersReducedMotion() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+
+  function getChartAnimationConfig() {
+    return prefersReducedMotion() ? false : { duration: 350 };
+  }
+
+  function safeJsonParse(raw, fallback) {
+    try {
+      return JSON.parse(raw);
+    } catch (_error) {
+      return fallback;
+    }
+  }
+
+  function formatCurrency(value, emptyText) {
+    if (!Number.isFinite(value)) return emptyText || t('No data', '無資料');
+    return `NT$${Math.round(value).toLocaleString('en-US')}`;
+  }
+
+  function formatCompactCurrency(value) {
+    if (!Number.isFinite(value)) return '--';
+    if (value >= 1000) return `${Math.round(value / 1000)}k`;
+    return `${Math.round(value)}`;
+  }
+
+  function normalizeNumber(value) {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  }
+
+  function average(values) {
+    const valid = values.filter((value) => Number.isFinite(value));
+    if (!valid.length) return null;
+    return valid.reduce((sum, value) => sum + value, 0) / valid.length;
+  }
+
+  function getTrackingRecord(destination) {
+    const tracking = safeJsonParse(localStorage.getItem('travelintel_tracking') || '[]', []);
+    return tracking.find((item) => item && (item.id === destination || item.destination === destination)) || null;
+  }
+
+  function getDateRangeQuery(destination) {
+    const track = getTrackingRecord(destination);
+    if (!track || !track.dateRange) return '';
+    return `&dateRange=${encodeURIComponent(JSON.stringify(track.dateRange))}`;
+  }
+
+  function showToast(message, type) {
+    const app = getApp();
+    if (typeof app.showToast === 'function') {
+      app.showToast(message, type);
+    }
+  }
+
+  function ensurePopover(container) {
+    let popover = container.querySelector(`#${POPUP_ID}`);
+    if (popover) return popover;
+
+    popover = document.createElement('div');
+    popover.id = POPUP_ID;
+    popover.style.position = 'absolute';
+    popover.style.minWidth = '180px';
+    popover.style.maxWidth = '240px';
+    popover.style.padding = '10px 12px';
+    popover.style.borderRadius = '8px';
+    popover.style.background = getCssColor('--color-surface', '#ffffff');
+    popover.style.color = getCssColor('--color-text-primary', '#111827');
+    popover.style.border = `1px solid ${getCssColor('--color-text-secondary', 'rgba(0,0,0,0.15)')}`;
+    popover.style.boxShadow = '0 10px 30px rgba(0,0,0,0.12)';
+    popover.style.fontSize = '0.85rem';
+    popover.style.lineHeight = '1.5';
+    popover.style.zIndex = '10';
+    popover.style.pointerEvents = 'none';
+    popover.style.opacity = '0';
+    popover.style.transform = 'translateY(4px)';
+    popover.style.transition = prefersReducedMotion() ? 'none' : 'opacity 0.15s ease, transform 0.15s ease';
+    container.style.position = 'relative';
+    container.appendChild(popover);
+    return popover;
+  }
+
+  function hidePopover(container) {
+    const popover = container.querySelector(`#${POPUP_ID}`);
+    if (!popover) return;
+    popover.style.opacity = '0';
+    popover.style.transform = 'translateY(4px)';
+  }
+
+  function renderPopover(container, cell, day) {
+    const popover = ensurePopover(container);
+    const lowPrice = normalizeNumber(day.flightPrice);
+    const highPrice = Number.isFinite(lowPrice) ? Math.round(lowPrice * 1.15) : null;
+    const weatherScore = normalizeNumber(day.weatherScore);
+    const flightsEstimate = Number.isFinite(lowPrice)
+      ? Math.max(1, Math.round(12 - day.priceLevel * 1.5))
+      : null;
+
+    popover.innerHTML = [
+      `<div style="font-weight:700; margin-bottom:4px;">${day.date || t('Unknown date', '未知日期')}</div>`,
+      `<div>${t('Price', '票價')}: ${formatCurrency(lowPrice)}</div>`,
+      `<div>${t('Price level', '價位等級')}: ${day.priceLevel || '--'} / 5</div>`,
+      `<div>${t('Weather score', '天氣分數')}: ${Number.isFinite(weatherScore) ? weatherScore : '--'}</div>`,
+      `<div>${t('Estimated flights', '估計航班數')}: ${Number.isFinite(flightsEstimate) ? flightsEstimate : '--'}</div>`,
+      `<div>${t('Estimated high', '估計高點')}: ${formatCurrency(highPrice)}</div>`
+    ].join('');
+
+    const cellRect = cell.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const left = Math.max(8, cellRect.left - containerRect.left);
+    const top = Math.max(8, cellRect.top - containerRect.top - popover.offsetHeight - 12);
+
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
+    popover.style.background = getCssColor('--color-surface', '#ffffff');
+    popover.style.color = getCssColor('--color-text-primary', '#111827');
+    popover.style.borderColor = getCssColor('--color-text-secondary', 'rgba(0,0,0,0.15)');
+    popover.style.opacity = '1';
+    popover.style.transform = 'translateY(0)';
+  }
+
+  function buildTrendDatasets(labels, flightPrices, hotelPrices, colors) {
+    const avgFlight = average(flightPrices);
+    const avgHotel = average(hotelPrices);
+
     return {
-      animation: isReducedMotion ? false : { duration: 1000 }
+      datasets: [
+        {
+          label: t('Flight Price', '機票均價'),
+          data: flightPrices,
+          borderColor: colors.flight,
+          backgroundColor: colors.flight,
+          yAxisID: 'yFlight',
+          tension: 0.3,
+          spanGaps: true,
+          pointRadius: 2
+        },
+        {
+          label: t('Hotel Price', '飯店均價'),
+          data: hotelPrices,
+          borderColor: colors.hotel,
+          backgroundColor: colors.hotel,
+          yAxisID: 'yHotel',
+          tension: 0.3,
+          spanGaps: true,
+          pointRadius: 2
+        },
+        {
+          label: t('Avg Flight', '機票平均'),
+          data: labels.map(() => avgFlight),
+          borderColor: colors.flight,
+          borderDash: [5, 5],
+          borderWidth: 1,
+          pointRadius: 0,
+          yAxisID: 'yFlight',
+          spanGaps: true
+        },
+        {
+          label: t('Avg Hotel', '飯店平均'),
+          data: labels.map(() => avgHotel),
+          borderColor: colors.hotel,
+          borderDash: [5, 5],
+          borderWidth: 1,
+          pointRadius: 0,
+          yAxisID: 'yHotel',
+          spanGaps: true
+        }
+      ],
+      avgFlight,
+      avgHotel
+    };
+  }
+
+  function getTrendOptions(avgFlight, avgHotel, colors) {
+    return {
+      animation: getChartAnimationConfig(),
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
+      plugins: {
+        legend: {
+          labels: {
+            color: colors.text
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label(context) {
+              const value = normalizeNumber(context.raw);
+              const avg = context.dataset.yAxisID === 'yFlight' ? avgFlight : avgHotel;
+              if (!Number.isFinite(value)) {
+                return `${context.dataset.label}: ${t('No data', '無資料')}`;
+              }
+              const diff = Number.isFinite(avg) ? Math.round(value - avg) : null;
+              const suffix = diff === null
+                ? ''
+                : ` (${t('vs avg', '相較平均')}: ${diff > 0 ? '+' : ''}${diff})`;
+              return `${context.dataset.label}: ${formatCurrency(value)}${suffix}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: colors.text }
+        },
+        yFlight: {
+          type: 'linear',
+          display: true,
+          position: 'left',
+          title: {
+            display: true,
+            text: t('Flight (NT$)', '機票 (NT$)'),
+            color: colors.text
+          },
+          ticks: {
+            color: colors.text,
+            callback(value) {
+              return formatCompactCurrency(Number(value));
+            }
+          }
+        },
+        yHotel: {
+          type: 'linear',
+          display: true,
+          position: 'right',
+          title: {
+            display: true,
+            text: t('Hotel (NT$)', '飯店 (NT$)'),
+            color: colors.text
+          },
+          ticks: {
+            color: colors.text,
+            callback(value) {
+              return formatCompactCurrency(Number(value));
+            }
+          },
+          grid: {
+            drawOnChartArea: false
+          }
+        }
+      }
     };
   }
 
   async function renderTrendChart(destination) {
     const canvas = document.getElementById('chart-trend');
-    const container = canvas.parentElement;
-    
-    // Skeleton
+    if (!canvas) return;
+
+    const container = canvas.parentElement || canvas;
+    container.classList.add('chart-container', 'chart-container--dual-axis');
     if (!trendChartInstance) {
-       container.classList.add('skeleton', 'skeleton--chart');
+      container.classList.add('skeleton', 'skeleton--chart');
     }
 
     try {
-      let url = `/api/flight-trend?destination=${destination}`;
-      const tracking = JSON.parse(localStorage.getItem('travelintel_tracking') || '[]');
-      const track = tracking.find(t => t.id === destination || t.destination === destination);
-      if (track && track.dateRange) {
-         url += `&dateRange=${encodeURIComponent(JSON.stringify(track.dateRange))}`;
-      }
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('API Error');
-      const data = await res.json();
-      
-      container.classList.remove('skeleton', 'skeleton--chart');
-      container.classList.add('chart-container', 'chart-container--dual-axis');
+      const response = await fetch(`/api/flight-trend?destination=${encodeURIComponent(destination)}${getDateRangeQuery(destination)}`);
+      if (!response.ok) throw new Error(`Trend API ${response.status}`);
 
-      const labels = data.trend.map(t => t.date);
-      const flightPrices = data.trend.map(t => t.avgFlightPrice);
-      const hotelPrices = data.trend.map(t => t.avgHotelPrice);
+      const payload = await response.json();
+      const trend = Array.isArray(payload.trend) ? payload.trend : [];
 
-      const avgFlight = flightPrices.reduce((a, b) => a + b, 0) / (flightPrices.length || 1);
-      const avgHotel = hotelPrices.reduce((a, b) => a + b, 0) / (hotelPrices.length || 1);
+      const labels = trend.map((item) => item.date || '');
+      const flightPrices = trend.map((item) => normalizeNumber(item.avgFlightPrice));
+      const hotelPrices = trend.map((item) => normalizeNumber(item.avgHotelPrice));
 
-      const flightColor = getCssColor('--color-primary-mid');
-      const hotelColor = getCssColor('--color-accent');
-      const textColor = getCssColor('--color-text-secondary');
+      const colors = {
+        flight: getCssColor('--color-primary-mid', '#2E6DB4'),
+        hotel: getCssColor('--color-accent', '#1D9E75'),
+        text: getCssColor('--color-text-secondary', '#6B7280')
+      };
+
+      const { datasets, avgFlight, avgHotel } = buildTrendDatasets(labels, flightPrices, hotelPrices, colors);
 
       if (trendChartInstance) {
         trendChartInstance.destroy();
@@ -55,263 +312,384 @@
       trendChartInstance = new Chart(canvas, {
         type: 'line',
         data: {
-          labels,
+          labels: labels.length ? labels : [t('No data', '無資料')],
+          datasets
+        },
+        options: getTrendOptions(avgFlight, avgHotel, colors)
+      });
+
+      container.classList.remove('skeleton', 'skeleton--chart');
+
+      if (!trend.length) {
+        showToast(t('Trend chart has no data.', '趨勢圖目前沒有資料。'), 'warning');
+      }
+    } catch (error) {
+      container.classList.remove('skeleton', 'skeleton--chart');
+      if (trendChartInstance) {
+        trendChartInstance.destroy();
+        trendChartInstance = null;
+      }
+
+      trendChartInstance = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: [t('No data', '無資料')],
           datasets: [
             {
-              label: 'Flight Price',
-              data: flightPrices,
-              borderColor: flightColor,
-              backgroundColor: flightColor,
-              yAxisID: 'yFlight',
-              tension: 0.3
-            },
-            {
-              label: 'Hotel Price',
-              data: hotelPrices,
-              borderColor: hotelColor,
-              backgroundColor: hotelColor,
-              yAxisID: 'yHotel',
-              tension: 0.3
+              label: t('Flight Price', '機票均價'),
+              data: [null],
+              borderColor: getCssColor('--color-primary-mid', '#2E6DB4'),
+              backgroundColor: getCssColor('--color-primary-mid', '#2E6DB4'),
+              yAxisID: 'yFlight'
             }
           ]
         },
-        options: {
-          ...getChartConfig(),
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: {
-            mode: 'index',
-            intersect: false,
-          },
-          plugins: {
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  const val = context.raw;
-                  const avg = context.datasetIndex === 0 ? avgFlight : avgHotel;
-                  const diff = val - avg;
-                  const diffStr = diff > 0 ? `+${Math.round(diff)}` : `${Math.round(diff)}`;
-                  return `${context.dataset.label}: NT$${val} (vs Avg: ${diffStr})`;
-                }
-              }
-            }
-          },
-          scales: {
-            x: {
-              ticks: { color: textColor }
-            },
-            yFlight: {
-              type: 'linear',
-              display: true,
-              position: 'left',
-              title: { display: true, text: 'Flight (NT$)', color: textColor },
-              ticks: { color: textColor }
-            },
-            yHotel: {
-              type: 'linear',
-              display: true,
-              position: 'right',
-              title: { display: true, text: 'Hotel (NT$)', color: textColor },
-              ticks: { color: textColor },
-              grid: { drawOnChartArea: false }
-            }
-          }
-        }
+        options: getTrendOptions(null, null, {
+          flight: getCssColor('--color-primary-mid', '#2E6DB4'),
+          hotel: getCssColor('--color-accent', '#1D9E75'),
+          text: getCssColor('--color-text-secondary', '#6B7280')
+        })
       });
-      
-      // Manually add average line datasets
-      trendChartInstance.data.datasets.push({
-          label: 'Avg Flight',
-          data: labels.map(() => avgFlight),
-          borderColor: flightColor,
-          borderDash: [5, 5],
-          borderWidth: 1,
-          pointRadius: 0,
-          yAxisID: 'yFlight'
-      });
-      trendChartInstance.data.datasets.push({
-          label: 'Avg Hotel',
-          data: labels.map(() => avgHotel),
-          borderColor: hotelColor,
-          borderDash: [5, 5],
-          borderWidth: 1,
-          pointRadius: 0,
-          yAxisID: 'yHotel'
-      });
-      trendChartInstance.update();
 
-    } catch (e) {
-      console.error(e);
-      container.classList.remove('skeleton', 'skeleton--chart');
+      showToast(t('Trend chart fallback mode.', '趨勢圖已切到 fallback 顯示。'), 'warning');
+      console.error(error);
     }
+  }
+
+  function buildHeatmapHeader(container) {
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.style.gap = '12px';
+    header.style.flexWrap = 'wrap';
+    header.style.marginBottom = '12px';
+
+    const title = document.createElement('h3');
+    title.textContent = t('Price Heatmap', '價格熱力圖');
+    title.style.margin = '0';
+    title.style.color = getCssColor('--color-text-primary', '#111827');
+
+    const controls = document.createElement('div');
+    controls.style.display = 'flex';
+    controls.style.gap = '8px';
+
+    ['outbound', 'return'].forEach((type) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = type === 'outbound' ? t('Outbound', '去程') : t('Return', '回程');
+      button.style.padding = '6px 10px';
+      button.style.borderRadius = '8px';
+      button.style.border = `1px solid ${getCssColor('--color-text-secondary', 'rgba(0,0,0,0.12)')}`;
+      button.style.cursor = 'pointer';
+      button.style.background = heatmapType === type
+        ? getCssColor('--color-primary', '#1A3C6E')
+        : getCssColor('--color-surface', '#ffffff');
+      button.style.color = heatmapType === type ? '#ffffff' : getCssColor('--color-text-primary', '#111827');
+      button.onclick = function() {
+        heatmapType = type;
+        renderHeatmap(activeDestination);
+      };
+      controls.appendChild(button);
+    });
+
+    header.appendChild(title);
+    header.appendChild(controls);
+    container.appendChild(header);
+  }
+
+  function buildHeatmapLegend(container) {
+    const legend = document.createElement('div');
+    legend.style.display = 'flex';
+    legend.style.alignItems = 'center';
+    legend.style.flexWrap = 'wrap';
+    legend.style.gap = '10px';
+    legend.style.marginBottom = '12px';
+    legend.style.color = getCssColor('--color-text-secondary', '#6B7280');
+    legend.style.fontSize = '0.85rem';
+
+    const label = document.createElement('span');
+    label.textContent = t('Legend', '圖例');
+    label.style.fontWeight = '600';
+    legend.appendChild(label);
+
+    LEGEND_LEVELS.forEach((level) => {
+      const item = document.createElement('div');
+      item.style.display = 'flex';
+      item.style.alignItems = 'center';
+      item.style.gap = '6px';
+
+      const swatch = document.createElement('span');
+      swatch.className = `heatmap-cell heatmap-cell--${level}`;
+      swatch.style.display = 'inline-block';
+      swatch.style.width = '14px';
+      swatch.style.height = '14px';
+      swatch.style.borderRadius = '4px';
+
+      const text = document.createElement('span');
+      if (level === 1) text.textContent = t('Low', '低價');
+      else if (level === 5) text.textContent = t('High', '高價');
+      else text.textContent = `${level}`;
+
+      item.appendChild(swatch);
+      item.appendChild(text);
+      legend.appendChild(item);
+    });
+
+    container.appendChild(legend);
+  }
+
+  function filterHeatmapDays(days, destination) {
+    const track = getTrackingRecord(destination);
+    if (!track || !track.dateRange || !track.dateRange.start || !track.dateRange.end) {
+      return days;
+    }
+
+    const start = new Date(track.dateRange.start);
+    const end = new Date(track.dateRange.end);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    return days.filter((day) => {
+      const current = new Date(day.date);
+      return current >= start && current <= end;
+    });
+  }
+
+  function groupDaysByMonth(days) {
+    const groups = new Map();
+
+    days.forEach((day) => {
+      const dateObj = new Date(day.date);
+      if (Number.isNaN(dateObj.getTime())) return;
+
+      const key = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          name: dateObj.toLocaleString(isChinese() ? 'zh-TW' : 'en-US', {
+            month: 'long',
+            year: 'numeric'
+          }),
+          days: []
+        });
+      }
+      groups.get(key).days.push(day);
+    });
+
+    return groups;
+  }
+
+  function buildEmptyHeatmapState(container, message) {
+    const empty = document.createElement('div');
+    empty.style.padding = '16px';
+    empty.style.borderRadius = '12px';
+    empty.style.background = getCssColor('--color-surface', '#ffffff');
+    empty.style.color = getCssColor('--color-text-secondary', '#6B7280');
+    empty.style.border = `1px dashed ${getCssColor('--color-text-secondary', 'rgba(0,0,0,0.15)')}`;
+    empty.textContent = message;
+    container.appendChild(empty);
+  }
+
+  function createMonthGrid(monthData, wrapper) {
+    const monthContainer = document.createElement('section');
+    monthContainer.style.minWidth = '240px';
+
+    const title = document.createElement('h4');
+    title.textContent = monthData.name;
+    title.style.margin = '0 0 10px 0';
+    title.style.textAlign = 'center';
+    title.style.fontWeight = '700';
+    title.style.color = getCssColor('--color-text-primary', '#111827');
+    monthContainer.appendChild(title);
+
+    const grid = document.createElement('div');
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = 'repeat(7, minmax(28px, 1fr))';
+    grid.style.gap = '6px';
+
+    const dayLabels = isChinese()
+      ? ['日', '一', '二', '三', '四', '五', '六']
+      : ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+    dayLabels.forEach((label) => {
+      const cell = document.createElement('div');
+      cell.textContent = label;
+      cell.style.textAlign = 'center';
+      cell.style.fontSize = '0.75rem';
+      cell.style.fontWeight = '700';
+      cell.style.color = getCssColor('--color-text-secondary', '#6B7280');
+      grid.appendChild(cell);
+    });
+
+    if (monthData.days.length) {
+      const firstDay = new Date(monthData.days[0].date).getDay();
+      for (let index = 0; index < firstDay; index += 1) {
+        grid.appendChild(document.createElement('div'));
+      }
+    }
+
+    monthData.days.forEach((day) => {
+      const cell = document.createElement('button');
+      cell.type = 'button';
+      cell.className = `heatmap-cell heatmap-cell--${Math.min(5, Math.max(1, Number(day.priceLevel) || 3))}`;
+      cell.style.minHeight = '54px';
+      cell.style.padding = '6px';
+      cell.style.border = 'none';
+      cell.style.borderRadius = '8px';
+      cell.style.cursor = 'pointer';
+      cell.style.position = 'relative';
+      cell.style.display = 'flex';
+      cell.style.flexDirection = 'column';
+      cell.style.alignItems = 'center';
+      cell.style.justifyContent = 'center';
+      cell.style.transition = prefersReducedMotion() ? 'none' : 'transform 0.12s ease';
+
+      const dateValue = new Date(day.date);
+      const dayNumber = Number.isNaN(dateValue.getTime()) ? '--' : dateValue.getDate();
+      const flightPrice = normalizeNumber(day.flightPrice);
+
+      cell.innerHTML = `
+        <span style="position:absolute;top:4px;left:6px;font-size:0.72rem;font-weight:700;opacity:0.85;">${dayNumber}</span>
+        <span style="font-size:0.92rem;font-weight:700;margin-top:8px;">${formatCompactCurrency(flightPrice)}</span>
+      `;
+
+      cell.onmouseenter = function() {
+        if (!prefersReducedMotion()) cell.style.transform = 'scale(1.04)';
+        renderPopover(wrapper, cell, day);
+      };
+      cell.onmouseleave = function() {
+        cell.style.transform = 'scale(1)';
+        hidePopover(wrapper);
+      };
+      cell.onfocus = function() {
+        renderPopover(wrapper, cell, day);
+      };
+      cell.onblur = function() {
+        hidePopover(wrapper);
+      };
+      cell.onclick = function() {
+        showToast(
+          `${day.date || '--'} · ${t('Price', '票價')}: ${formatCurrency(flightPrice)}`,
+          'success'
+        );
+      };
+
+      grid.appendChild(cell);
+    });
+
+    monthContainer.appendChild(grid);
+    return monthContainer;
   }
 
   async function renderHeatmap(destination) {
     const container = document.getElementById('chart-heatmap');
-    container.innerHTML = '<div class="skeleton skeleton--chart"></div>';
-    
-    try {
-      const res = await fetch(`/api/heatmap?destination=${destination}&type=${heatmapType}`);
-      if (!res.ok) throw new Error('API Error');
-      const data = await res.json();
-      
-      container.innerHTML = '';
-      container.classList.add('chart-container');
-      
-      const t = (en, zh) => window.TravelIntel.app.isChinese() ? zh : en;
-      const lang = document.documentElement.lang;
-      
-      const header = document.createElement('div');
-      header.className = 'flex justify-between items-center';
-      header.innerHTML = `
-        <h3 style="margin:0;">${t('Price Heatmap', '價格熱力圖')}</h3>
-        <div>
-          <button id="hm-outbound" style="padding:4px 8px; border-radius:4px; border:1px solid var(--border-color); cursor:pointer; ${heatmapType==='outbound'?'background:var(--color-primary);color:#fff':'background:var(--color-surface);color:var(--color-text-primary)'}">${t('Outbound', '去程')}</button>
-          <button id="hm-return" style="padding:4px 8px; border-radius:4px; border:1px solid var(--border-color); cursor:pointer; ${heatmapType==='return'?'background:var(--color-primary);color:#fff':'background:var(--color-surface);color:var(--color-text-primary)'}">${t('Return', '回程')}</button>
-        </div>
-      `;
-      container.appendChild(header);
-      
-      document.getElementById('hm-outbound').onclick = () => { heatmapType = 'outbound'; renderHeatmap(activeDestination); };
-      document.getElementById('hm-return').onclick = () => { heatmapType = 'return'; renderHeatmap(activeDestination); };
+    if (!container) return;
 
-      const gridWrapper = document.createElement('div');
-      gridWrapper.className = 'chart-container--heatmap flex gap-lg';
-      gridWrapper.style.overflowX = 'auto';
-      gridWrapper.style.paddingBottom = '16px'; // scrollbar space
-      
-      // Apply Date Filter from tracking
-      const tracking = JSON.parse(localStorage.getItem('travelintel_tracking') || '[]');
-      const track = tracking.find(t => t.id === activeDestination || t.destination === activeDestination);
-      if (track && track.dateRange && track.dateRange.start && track.dateRange.end) {
-          const start = new Date(track.dateRange.start);
-          const end = new Date(track.dateRange.end);
-          // Set to start of day and end of day to avoid timezone cutoff issues
-          start.setHours(0,0,0,0);
-          end.setHours(23,59,59,999);
-          data.days = data.days.filter(d => {
-              const current = new Date(d.date);
-              return current >= start && current <= end;
-          });
+    container.classList.add('chart-container', 'chart-container--heatmap');
+    container.innerHTML = '<div class="skeleton skeleton--chart"></div>';
+
+    try {
+      const response = await fetch(`/api/heatmap?destination=${encodeURIComponent(destination)}&type=${encodeURIComponent(heatmapType)}`);
+      if (!response.ok) throw new Error(`Heatmap API ${response.status}`);
+
+      const payload = await response.json();
+      lastHeatmapPayload = payload;
+
+      const originalDays = Array.isArray(payload.days) ? payload.days : [];
+      const filteredDays = filterHeatmapDays(originalDays, destination);
+      const groups = groupDaysByMonth(filteredDays);
+
+      container.innerHTML = '';
+      buildHeatmapHeader(container);
+      buildHeatmapLegend(container);
+
+      const wrapper = document.createElement('div');
+      wrapper.style.display = 'flex';
+      wrapper.style.gap = '16px';
+      wrapper.style.overflowX = 'auto';
+      wrapper.style.paddingBottom = '12px';
+
+      if (!filteredDays.length) {
+        buildEmptyHeatmapState(container, t('No heatmap data for this range.', '此區間沒有熱力圖資料。'));
+        return;
       }
 
-      // Group by month
-      const months = {};
-      data.days.forEach(day => {
-         const dateObj = new Date(day.date);
-         const m = dateObj.getFullYear() + '-' + (dateObj.getMonth() + 1).toString().padStart(2, '0');
-         if (!months[m]) months[m] = { name: dateObj.toLocaleString(window.TravelIntel.app.isChinese() ? 'zh-TW' : 'en-US', {month: 'long', year:'numeric'}), days: [] };
-         months[m].days.push(day);
+      groups.forEach((monthData) => {
+        wrapper.appendChild(createMonthGrid(monthData, wrapper));
       });
 
-      const dayLabels = window.TravelIntel.app.isChinese() ? ['日','一','二','三','四','五','六'] : ['Su','Mo','Tu','We','Th','Fr','Sa'];
-
-      Object.keys(months).forEach(mKey => {
-         const mData = months[mKey];
-         const mContainer = document.createElement('div');
-         mContainer.innerHTML = `<h4 style="text-align:center; margin-bottom:12px; font-weight:bold; color:var(--color-text-primary);">${mData.name}</h4>`;
-         
-         const mGrid = document.createElement('div');
-         mGrid.style.display = 'grid';
-         mGrid.style.gridTemplateColumns = 'repeat(7, 1fr)';
-         mGrid.style.gap = '6px';
-
-         // Headers
-         dayLabels.forEach(dl => {
-             mGrid.innerHTML += `<div style="text-align:center; font-size:0.75rem; color:var(--color-text-secondary); font-weight:bold;">${dl}</div>`;
-         });
-
-         // Pad empty days
-         if (mData.days.length > 0) {
-             const firstDay = new Date(mData.days[0].date).getDay();
-             for (let i = 0; i < firstDay; i++) {
-                 mGrid.innerHTML += `<div></div>`;
-             }
-         }
-
-         mData.days.forEach(day => {
-            const cell = document.createElement('div');
-            cell.className = `heatmap-cell heatmap-cell--${day.priceLevel}`;
-            cell.style.padding = '8px';
-            cell.style.borderRadius = '4px';
-            cell.style.minWidth = '45px';
-            cell.style.cursor = 'pointer';
-            cell.style.transition = 'transform 0.1s';
-            
-            // Flex layout with relative positioning for date in top-left
-            cell.style.display = 'flex';
-            cell.style.flexDirection = 'column';
-            cell.style.alignItems = 'center';
-            cell.style.justifyContent = 'center';
-            cell.style.position = 'relative';
-            
-            const dayOfMonth = new Date(day.date).getDate();
-            const priceK = Math.round(day.flightPrice / 1000) + 'k';
-            cell.innerHTML = `
-              <span style="position:absolute; top:4px; left:6px; font-size:0.75rem; font-weight:600; opacity:0.8;">${dayOfMonth}</span>
-              <span style="font-size:1rem; font-weight:bold; margin-top:8px;">${priceK}</span>
-            `;
-            
-            cell.onmouseenter = () => cell.style.transform = 'scale(1.1)';
-            cell.onmouseleave = () => cell.style.transform = 'scale(1)';
-            
-            cell.onclick = () => {
-              if(window.TravelIntel && window.TravelIntel.app && window.TravelIntel.app.showToast) {
-                window.TravelIntel.app.showToast(`Date: ${day.date} | Low: NT$${day.flightPrice} | High: NT$${Math.round(day.flightPrice*1.3)}`, 'success');
-              }
-            };
-            mGrid.appendChild(cell);
-         });
-
-         mContainer.appendChild(mGrid);
-         gridWrapper.appendChild(mContainer);
-      });
-      
-      container.appendChild(gridWrapper);
-      
-    } catch (e) {
-      console.error(e);
-      container.innerHTML = '<p>Error loading heatmap.</p>';
+      container.appendChild(wrapper);
+      ensurePopover(wrapper);
+    } catch (error) {
+      container.innerHTML = '';
+      buildHeatmapHeader(container);
+      buildHeatmapLegend(container);
+      buildEmptyHeatmapState(container, t('Heatmap unavailable. Rendering fallback state.', '熱力圖目前不可用，已顯示 fallback 狀態。'));
+      console.error(error);
+      showToast(t('Heatmap fallback mode.', '熱力圖已切到 fallback 顯示。'), 'warning');
     }
   }
 
-  // Contract Export
+  function redrawTrendColors() {
+    if (!trendChartInstance) return;
+
+    const flightColor = getCssColor('--color-primary-mid', '#2E6DB4');
+    const hotelColor = getCssColor('--color-accent', '#1D9E75');
+    const textColor = getCssColor('--color-text-secondary', '#6B7280');
+
+    const [flightDataset, hotelDataset, avgFlightDataset, avgHotelDataset] = trendChartInstance.data.datasets;
+    if (flightDataset) {
+      flightDataset.borderColor = flightColor;
+      flightDataset.backgroundColor = flightColor;
+    }
+    if (hotelDataset) {
+      hotelDataset.borderColor = hotelColor;
+      hotelDataset.backgroundColor = hotelColor;
+    }
+    if (avgFlightDataset) avgFlightDataset.borderColor = flightColor;
+    if (avgHotelDataset) avgHotelDataset.borderColor = hotelColor;
+
+    if (trendChartInstance.options.plugins && trendChartInstance.options.plugins.legend) {
+      trendChartInstance.options.plugins.legend.labels.color = textColor;
+    }
+
+    if (trendChartInstance.options.scales) {
+      const scales = trendChartInstance.options.scales;
+      if (scales.x && scales.x.ticks) scales.x.ticks.color = textColor;
+      if (scales.yFlight) {
+        if (scales.yFlight.title) scales.yFlight.title.color = textColor;
+        if (scales.yFlight.ticks) scales.yFlight.ticks.color = textColor;
+      }
+      if (scales.yHotel) {
+        if (scales.yHotel.title) scales.yHotel.title.color = textColor;
+        if (scales.yHotel.ticks) scales.yHotel.ticks.color = textColor;
+      }
+    }
+
+    trendChartInstance.options.animation = getChartAnimationConfig();
+    trendChartInstance.update();
+  }
+
+  function redrawHeatmapTheme() {
+    const container = document.getElementById('chart-heatmap');
+    if (!container || !lastHeatmapPayload) return;
+    renderHeatmap(activeDestination);
+  }
+
+  window.TravelIntel = window.TravelIntel || {};
   window.TravelIntel.charts = {
     refreshCharts(destination) {
       if (destination) activeDestination = destination;
       renderTrendChart(activeDestination);
       renderHeatmap(activeDestination);
     },
-    redrawCharts(theme) {
-      if (trendChartInstance) {
-        const flightColor = getCssColor('--color-primary-mid');
-        const hotelColor = getCssColor('--color-accent');
-        const textColor = getCssColor('--color-text-secondary');
-        
-        // Update scales
-        trendChartInstance.options.scales.x.ticks.color = textColor;
-        trendChartInstance.options.scales.yFlight.title.color = textColor;
-        trendChartInstance.options.scales.yFlight.ticks.color = textColor;
-        trendChartInstance.options.scales.yHotel.title.color = textColor;
-        trendChartInstance.options.scales.yHotel.ticks.color = textColor;
-        
-        // Update datasets
-        trendChartInstance.data.datasets[0].borderColor = flightColor;
-        trendChartInstance.data.datasets[0].backgroundColor = flightColor;
-        trendChartInstance.data.datasets[1].borderColor = hotelColor;
-        trendChartInstance.data.datasets[1].backgroundColor = hotelColor;
-        trendChartInstance.data.datasets[2].borderColor = flightColor; // avg
-        trendChartInstance.data.datasets[3].borderColor = hotelColor; // avg
-        
-        trendChartInstance.update();
-      }
+    redrawCharts() {
+      redrawTrendColors();
+      redrawHeatmapTheme();
     }
   };
 
-  document.addEventListener('themechange', (e) => {
-    setTimeout(() => {
-      window.TravelIntel.charts.redrawCharts(e.detail.theme);
-    }, 50);
+  document.addEventListener('themechange', function() {
+    window.TravelIntel.charts.redrawCharts();
   });
-
 })();

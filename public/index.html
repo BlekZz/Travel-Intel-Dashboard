@@ -56,8 +56,8 @@
     <section id="tab-dashboard" class="tab-panel">
         <div class="tracking-header">
           <div class="flex gap-md items-center">
-            <h2 id="dashboard-title" style="margin:0; font-size:1.25rem; font-weight:800; color:var(--color-text-primary);"></h2>
-            <div id="tracking-tabs" class="flex gap-sm" style="flex-wrap:wrap;"></div>
+            <h2 id="dashboard-title"></h2>
+            <div id="tracking-tabs" class="flex gap-sm"></div>
           </div>
           <button id="tracking-add-btn" class="btn btn--primary" data-i18n="add_tracking">+ Add Tracking</button>
         </div>
@@ -96,12 +96,11 @@
     <section id="tab-flights" class="tab-panel" hidden>
         <div id="flight-results"></div>
         <button id="compare-btn" class="btn btn--primary" data-i18n="compare">Compare Selected</button>
-        <div id="advice-banner" style="margin-top: 1rem;"></div>
     </section>
 
     <!-- Price History Tab -->
     <section id="tab-price-history" class="tab-panel" hidden>
-        <div id="ph-advice-banner" style="margin-bottom: 1rem;"></div>
+        <div id="advice-banner" class="advice-banner"></div>
         <div class="panel mt-md"><canvas id="chart-yoy"></canvas></div>
         <div class="panel mt-md"><canvas id="chart-fullyear"></canvas></div>
     </section>

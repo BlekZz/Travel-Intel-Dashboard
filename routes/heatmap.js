@@ -1,38 +1,76 @@
 const express = require('express');
 const router = express.Router();
 
+function hashString(input) {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function isLeapYear(year) {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+function buildHeatmapDays(destination, year, type) {
+  const totalDays = isLeapYear(year) ? 366 : 365;
+  const startDate = new Date(Date.UTC(year, 0, 1));
+  const routeSeed = hashString(`${destination}:${year}:${type}:heatmap`);
+  const basePrice = 7800 + (routeSeed % 4200);
+  const seasonalBands = [1.02, 0.97, 0.93, 0.96, 1.01, 1.08, 1.18, 1.22, 1.07, 1.0, 0.95, 1.04];
+  const days = [];
+
+  for (let index = 0; index < totalDays; index += 1) {
+    const current = new Date(startDate);
+    current.setUTCDate(startDate.getUTCDate() + index);
+    const date = current.toISOString().split('T')[0];
+    const month = current.getUTCMonth();
+    const daySeed = hashString(`${destination}:${type}:${date}`);
+    const weeklyBias = ((index + (type === 'return' ? 2 : 0)) % 7) - 3;
+    const price = Math.round(
+      basePrice * seasonalBands[month]
+      + weeklyBias * 120
+      + ((daySeed % 900) - 450)
+    );
+    const clampedPrice = Math.max(5000, clamped(price, 18500));
+    const relativeScore = ((clampedPrice - 5000) / 13500);
+    const priceLevel = Math.min(5, Math.max(1, Math.floor(relativeScore * 5) + 1));
+    const weatherScore = Math.min(95, Math.max(55, 84 - month * 2 + ((daySeed >>> 5) % 18) - 9));
+
+    days.push({
+      date,
+      flightPrice: clampedPrice,
+      priceLevel,
+      weatherScore
+    });
+  }
+
+  return days;
+}
+
+function clamped(value, max) {
+  return Math.min(max, Math.max(0, value));
+}
+
 router.get('/heatmap', async (req, res) => {
-    try {
-        const { destination, year, type } = req.query;
-        
-        // Mock data placeholder as per the API contract requirements
-        const days = [];
-        const targetYear = parseInt(year) || new Date().getFullYear();
-        const startDate = new Date(`${targetYear}-01-01`);
-        
-        // Generate mock data for the calendar heatmap
-        for(let i=0; i<365; i++) {
-            const date = new Date(startDate);
-            date.setDate(date.getDate() + i);
-            
-            days.push({
-                date: date.toISOString().split('T')[0],
-                flightPrice: Math.floor(Math.random() * 15000) + 5000,
-                priceLevel: Math.floor(Math.random() * 5) + 1, // 1 to 5 mapping
-                weatherScore: Math.floor(Math.random() * 40) + 60
-            });
-        }
-        
-        res.json({
-            destination: destination || 'NRT',
-            year: targetYear,
-            type: type || 'outbound',
-            days: days
-        });
-    } catch (error) {
-        console.error('Error in /api/heatmap:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
+  try {
+    const { destination = 'NRT', year, type = 'outbound' } = req.query;
+    const targetYear = Number.parseInt(year, 10) || new Date().getUTCFullYear();
+    const normalizedType = type === 'return' ? 'return' : 'outbound';
+    const days = buildHeatmapDays(destination, targetYear, normalizedType);
+
+    res.json({
+      destination,
+      year: targetYear,
+      type: normalizedType,
+      days
+    });
+  } catch (error) {
+    console.error('Error in /api/heatmap:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 module.exports = router;
