@@ -3,6 +3,7 @@
   let fullYearChartInstance = null;
   let controlsInitialized = false;
   let requestSequence = 0;
+  let lastRenderedPayload = null;
 
   const state = {
     origin: 'TPE',
@@ -346,35 +347,73 @@
       const priceHistoryData = normalizePriceHistoryPayload(priceHistoryResponse.data);
       const trendData = normalizeTrendPayload(trendResponse.data);
       const adviceData = normalizeAdvicePayload(adviceResponse.data);
-
-      renderAdviceBanner(adviceData, {
+      lastRenderedPayload = {
+        priceHistoryData,
+        trendData,
+        adviceData,
         priceHistoryOk: priceHistoryResponse.ok,
         trendOk: trendResponse.ok,
         adviceOk: adviceResponse.ok,
         combinedSources: mergeSourceMetadata(priceHistoryData, adviceData),
+      };
+
+      renderAdviceBanner(adviceData, {
+        priceHistoryOk: lastRenderedPayload.priceHistoryOk,
+        trendOk: lastRenderedPayload.trendOk,
+        adviceOk: lastRenderedPayload.adviceOk,
+        combinedSources: lastRenderedPayload.combinedSources,
       });
       renderYoyChart(priceHistoryData, priceHistoryResponse.ok);
       renderFullYearChart(trendData, adviceData, trendResponse.ok);
     } catch (error) {
       if (currentRequest !== requestSequence) return;
-      renderAdviceBanner(normalizeAdvicePayload(null), {
+      const fallbackAdvice = normalizeAdvicePayload(null);
+      const fallbackHistory = normalizePriceHistoryPayload(null);
+      const fallbackTrend = normalizeTrendPayload(null);
+      lastRenderedPayload = {
+        priceHistoryData: fallbackHistory,
+        trendData: fallbackTrend,
+        adviceData: fallbackAdvice,
+        priceHistoryOk: false,
+        trendOk: false,
+        adviceOk: false,
+        combinedSources: [],
+      };
+
+      renderAdviceBanner(fallbackAdvice, {
         priceHistoryOk: false,
         trendOk: false,
         adviceOk: false,
         combinedSources: [],
       });
-      renderYoyChart(normalizePriceHistoryPayload(null), false);
-      renderFullYearChart(normalizeTrendPayload(null), normalizeAdvicePayload(null), false);
+      renderYoyChart(fallbackHistory, false);
+      renderFullYearChart(fallbackTrend, fallbackAdvice, false);
 
       const app = getApp();
       if (app && typeof app.showToast === 'function') {
-        app.showToast('Failed to load price history data', 'error');
+        app.showToast(getTextBundle().isZh ? '載入歷史價格資料失敗' : 'Failed to load price history data', 'error');
       }
     } finally {
       if (currentRequest === requestSequence) {
         setLoadingState(false);
       }
     }
+  }
+
+  function redrawLanguage() {
+    initialize();
+    applyControlLabels();
+
+    if (!lastRenderedPayload) return;
+
+    renderAdviceBanner(lastRenderedPayload.adviceData, {
+      priceHistoryOk: lastRenderedPayload.priceHistoryOk,
+      trendOk: lastRenderedPayload.trendOk,
+      adviceOk: lastRenderedPayload.adviceOk,
+      combinedSources: lastRenderedPayload.combinedSources,
+    });
+    renderYoyChart(lastRenderedPayload.priceHistoryData, lastRenderedPayload.priceHistoryOk);
+    renderFullYearChart(lastRenderedPayload.trendData, lastRenderedPayload.adviceData, lastRenderedPayload.trendOk);
   }
 
   function renderAdviceBanner(data, context) {
@@ -763,4 +802,6 @@
     }
     fetchData();
   });
+
+  document.addEventListener('langchange', redrawLanguage);
 })();

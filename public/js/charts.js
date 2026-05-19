@@ -692,4 +692,8 @@
   document.addEventListener('themechange', function() {
     window.TravelIntel.charts.redrawCharts();
   });
+
+  document.addEventListener('langchange', function() {
+    window.TravelIntel.charts.refreshCharts(activeDestination);
+  });
 })();

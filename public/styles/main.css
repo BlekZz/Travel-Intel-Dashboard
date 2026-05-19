@@ -157,10 +157,10 @@ button {
 
 .app-title,
 #dashboard-title {
-  font-size: clamp(1.25rem, 2vw, 1.75rem);
+  font-size: 1.5rem;
   font-weight: 800;
   line-height: 1.15;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .app-title {
@@ -359,5 +359,10 @@ button {
 
   #tracking-tabs {
     width: 100%;
+  }
+
+  .app-title,
+  #dashboard-title {
+    font-size: 1.25rem;
   }
 }

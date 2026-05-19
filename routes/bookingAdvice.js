@@ -26,6 +26,36 @@ function normalizeMonth(targetMonthRaw) {
   return `${year}-${month}`;
 }
 
+function hasGeminiKey() {
+  return Boolean(String(process.env.GEMINI_API_KEY || '').trim());
+}
+
+function buildAnalysisContext(origin, destination, targetMonth, fallbackAdvice) {
+  return {
+    route: {
+      origin,
+      destination,
+      targetMonth
+    },
+    baseline: {
+      currentPriceLevel: fallbackAdvice.currentPriceLevel,
+      currentPriceDeviationPct: fallbackAdvice.currentPriceDeviationPct,
+      targetPriceTwd: fallbackAdvice.targetPriceTwd
+    },
+    note: 'Use live web-grounded evidence when available. Treat baseline values as deterministic local fallback, not authoritative market data.'
+  };
+}
+
+function buildTrendContext(origin, destination, targetMonth) {
+  return {
+    origin,
+    destination,
+    targetMonth,
+    requestedAt: new Date().toISOString(),
+    source: 'route-query-context'
+  };
+}
+
 function buildDeterministicAdvice(origin, destination, targetMonth) {
   const seed = hashString(`${origin}:${destination}:${targetMonth}:booking-advice`);
   const targetPriceTwd = 8200 + (seed % 4200);
@@ -65,10 +95,18 @@ router.get('/booking-advice', async (req, res) => {
     const origin = req.query.origin || 'TPE';
     const destination = req.query.destination || 'NRT';
     const targetMonth = normalizeMonth(req.query.targetMonth);
+    const fallback = buildDeterministicAdvice(origin, destination, targetMonth);
 
-    // Wave 1 policy: this route remains deterministic sample driven.
-    // Gemini service owns live AI contract normalization, but this route does not invoke it yet.
-    const result = buildDeterministicAdvice(origin, destination, targetMonth);
+    if (!hasGeminiKey()) {
+      return res.json(fallback);
+    }
+
+    const result = await gemini.getBookingAdvice(
+      buildAnalysisContext(origin, destination, targetMonth, fallback),
+      buildTrendContext(origin, destination, targetMonth),
+      { fallback }
+    );
+
     res.json(result);
   } catch (error) {
     console.error('Error in /api/booking-advice:', error.message);

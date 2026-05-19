@@ -167,9 +167,13 @@ function normalizeBookingAdviceResponse(payload, options = {}) {
       ? Math.round(targetPrice)
       : fallback.targetPriceTwd,
     confidence: normalizeConfidence(source.confidence, fallback.confidence),
-    riskNotes: normalizeStringArray(source.riskNotes),
+    riskNotes: normalizeStringArray(source.riskNotes).length
+      ? normalizeStringArray(source.riskNotes)
+      : normalizeStringArray(fallback.riskNotes),
     data_confidence: normalizeConfidence(source.data_confidence, fallback.data_confidence),
-    sources: normalizeSources(source.sources)
+    sources: normalizeSources(source.sources).length
+      ? normalizeSources(source.sources)
+      : normalizeSources(fallback.sources)
   };
 }
 

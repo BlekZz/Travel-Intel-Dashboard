@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Travel Intel Dashboard</title>
+
+    <script>
+        (function() {
+            var storedTheme = localStorage.getItem('travelintel_theme');
+            var prefersDark = window.matchMedia &&
+                window.matchMedia('(prefers-color-scheme: dark)').matches;
+            var theme = storedTheme || (prefersDark ? 'dark' : 'light');
+
+            document.documentElement.classList.add(theme === 'dark' ? 'theme-dark' : 'theme-light');
+        })();
+    </script>
     
     <style>
         :root {
@@ -39,27 +50,27 @@
   <div class="container">
     <header class="app-header">
       <h1 class="app-title">Travel Intel</h1>
-      <nav class="app-nav">
-          <button id="nav-dashboard" class="nav-btn active">Dashboard</button>
-          <button id="nav-flights" class="nav-btn">Flights</button>
-          <button id="nav-price-history" class="nav-btn">Price History</button>
+      <nav class="app-nav" aria-label="Primary">
+          <button id="nav-dashboard" class="nav-btn active" type="button" role="tab" aria-controls="tab-dashboard" aria-selected="true">Dashboard</button>
+          <button id="nav-flights" class="nav-btn" type="button" role="tab" aria-controls="tab-flights" aria-selected="false">Flights</button>
+          <button id="nav-price-history" class="nav-btn" type="button" role="tab" aria-controls="tab-price-history" aria-selected="false">Price History</button>
       </nav>
       <div>
-        <button id="lang-toggle" class="theme-btn">繁體中文</button>
-        <button id="theme-toggle" class="theme-btn">🌗</button>
+        <button id="lang-toggle" class="theme-btn" type="button">繁體中文</button>
+        <button id="theme-toggle" class="theme-btn" type="button" aria-label="Toggle theme">Theme</button>
       </div>
     </header>
 
     <div id="toast-container"></div>
 
     <!-- Dashboard Tab -->
-    <section id="tab-dashboard" class="tab-panel">
+    <section id="tab-dashboard" class="tab-panel" role="tabpanel" aria-labelledby="nav-dashboard">
         <div class="tracking-header">
           <div class="flex gap-md items-center">
             <h2 id="dashboard-title"></h2>
             <div id="tracking-tabs" class="flex gap-sm"></div>
           </div>
-          <button id="tracking-add-btn" class="btn btn--primary" data-i18n="add_tracking">+ Add Tracking</button>
+          <button id="tracking-add-btn" class="btn btn--primary" type="button" data-i18n="add_tracking">+ Add Tracking</button>
         </div>
 
         <div id="dashboard-search-bar" class="trip-search-bar">
@@ -70,7 +81,7 @@
           <input type="date" id="dash-start">
           <div class="search-divider"></div>
           <input type="date" id="dash-end">
-          <button id="dash-search-btn" class="btn btn--primary" data-i18n="search">Search</button>
+          <button id="dash-search-btn" class="btn btn--primary" type="button" data-i18n="search">Search</button>
         </div>
 
         <div class="metrics-grid">
@@ -93,13 +104,13 @@
     </section>
 
     <!-- Flights Tab -->
-    <section id="tab-flights" class="tab-panel" hidden>
+    <section id="tab-flights" class="tab-panel" role="tabpanel" aria-labelledby="nav-flights" hidden>
         <div id="flight-results"></div>
-        <button id="compare-btn" class="btn btn--primary" data-i18n="compare">Compare Selected</button>
+        <button id="compare-btn" class="btn btn--primary" type="button" data-i18n="compare">Compare Selected</button>
     </section>
 
     <!-- Price History Tab -->
-    <section id="tab-price-history" class="tab-panel" hidden>
+    <section id="tab-price-history" class="tab-panel" role="tabpanel" aria-labelledby="nav-price-history" hidden>
         <div id="advice-banner" class="advice-banner"></div>
         <div class="panel mt-md"><canvas id="chart-yoy"></canvas></div>
         <div class="panel mt-md"><canvas id="chart-fullyear"></canvas></div>

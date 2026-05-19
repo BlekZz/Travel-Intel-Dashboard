@@ -22,7 +22,7 @@ const ROUTE_DEFINITIONS = [
         modulePath: './routes/flights',
         mountPath: '/api',
         endpoints: ['/flights'],
-        requiredEnv: ['AMADEUS_API_KEY', 'AMADEUS_API_SECRET']
+        requiredEnv: []
     },
     {
         name: 'priceHistory',

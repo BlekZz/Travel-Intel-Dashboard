@@ -300,6 +300,35 @@
     });
 
     document.documentElement.lang = currentLang;
+    applyShellText(dict);
+  }
+
+  function applyShellText(dict) {
+    const placeholders = currentLang === 'zh'
+      ? {
+          'dash-origin': '出發地 (例：TPE)',
+          'dash-dest': '目的地 (例：NRT)'
+        }
+      : {
+          'dash-origin': 'Origin (e.g. TPE)',
+          'dash-dest': 'Destination (e.g. NRT)'
+        };
+
+    Object.entries(placeholders).forEach(([id, text]) => {
+      const el = document.getElementById(id);
+      if (el) el.setAttribute('placeholder', text);
+    });
+
+    const themeBtn = document.getElementById('theme-toggle');
+    if (themeBtn) {
+      themeBtn.textContent = currentLang === 'zh' ? '主題' : 'Theme';
+      themeBtn.setAttribute('aria-label', currentLang === 'zh' ? '切換主題' : 'Toggle theme');
+    }
+
+    const addTrackingBtn = document.getElementById('tracking-add-btn');
+    if (addTrackingBtn && dict['i18n-add_tracking']) {
+      addTrackingBtn.textContent = dict['i18n-add_tracking'];
+    }
   }
 
   function isChinese() {
@@ -359,6 +388,7 @@
         currentLang = currentLang === 'en' ? 'zh' : 'en';
         localStorage.setItem(LANG_KEY, currentLang);
         applyLang();
+        document.dispatchEvent(new CustomEvent('langchange', { detail: { lang: currentLang } }));
       });
     }
 

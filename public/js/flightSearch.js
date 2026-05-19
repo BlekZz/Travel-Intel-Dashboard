@@ -101,9 +101,9 @@
       const formMarkup = `
         <div id="fs-shell" style="display:grid; gap:var(--spacing-md); margin-bottom:var(--spacing-md);">
           <form id="fs-form" class="trip-search-bar" novalidate>
-            <input type="text" id="fs-origin" placeholder="Origin (e.g. TPE)" maxlength="3" value="${escapeHtml(DEFAULT_QUERY.origin)}" required>
+            <input type="text" id="fs-origin" placeholder="${escapeHtml(t('Origin (e.g. TPE)', '出發地 (例：TPE)'))}" maxlength="3" value="${escapeHtml(DEFAULT_QUERY.origin)}" required>
             <div class="search-divider"></div>
-            <input type="text" id="fs-dest" placeholder="Dest (e.g. NRT)" maxlength="3" value="${escapeHtml(DEFAULT_QUERY.destination)}" required>
+            <input type="text" id="fs-dest" placeholder="${escapeHtml(t('Destination (e.g. NRT)', '目的地 (例：NRT)'))}" maxlength="3" value="${escapeHtml(DEFAULT_QUERY.destination)}" required>
             <div class="search-divider"></div>
             <input type="date" id="fs-date" value="${escapeHtml(getDefaultDate())}" required>
             <div class="search-divider"></div>
@@ -175,6 +175,71 @@
     return true;
   }
 
+  function setSelectOptionText(selectId, labels) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+
+    Array.from(select.options).forEach(function(option) {
+      if (Object.prototype.hasOwnProperty.call(labels, option.value)) {
+        option.textContent = labels[option.value];
+      }
+    });
+  }
+
+  function applyStaticLanguage() {
+    const origin = document.getElementById('fs-origin');
+    const destination = document.getElementById('fs-dest');
+    const submit = document.querySelector('#fs-form button[type="submit"]');
+    const modalClose = document.getElementById('compare-close');
+    const modalTitle = document.querySelector('#compare-modal-wrapper h3');
+    const modalSubtitle = document.querySelector('#compare-modal-wrapper p');
+    const sortbar = document.getElementById('fs-sortbar');
+
+    if (origin) origin.placeholder = t('Origin (e.g. TPE)', '出發地 (例：TPE)');
+    if (destination) destination.placeholder = t('Destination (e.g. NRT)', '目的地 (例：NRT)');
+    if (submit) submit.textContent = t('Search Flights', '搜尋航班');
+    if (modalClose) modalClose.textContent = t('Close', '關閉');
+    if (modalTitle) modalTitle.textContent = t('Flight Comparison', '航班比較');
+    if (modalSubtitle) modalSubtitle.textContent = t('Compare up to 3 selected flights.', '最多比較 3 筆已選航班。');
+
+    setSelectOptionText('fs-adults', {
+      1: t('1 Adult', '1 位成人'),
+      2: t('2 Adults', '2 位成人'),
+      3: t('3 Adults', '3 位成人')
+    });
+    setSelectOptionText('fs-cabin', {
+      economy: t('Economy', '經濟艙'),
+      premium_economy: t('Premium Economy', '豪華經濟艙'),
+      business: t('Business', '商務艙')
+    });
+    setSelectOptionText('fs-max-stops', {
+      '': t('Any Stops', '不限轉機'),
+      0: t('Direct Only', '僅直飛'),
+      1: t('Up to 1 Stop', '最多 1 次轉機'),
+      2: t('Up to 2 Stops', '最多 2 次轉機')
+    });
+
+    const chips = {
+      'flt-direct': t('Direct', '直飛'),
+      'flt-budget': t('Budget', '廉航'),
+      'flt-baggage': t('With Baggage', '含行李')
+    };
+    Object.entries(chips).forEach(function([id, label]) {
+      const chip = document.getElementById(id);
+      if (chip) chip.textContent = label;
+    });
+
+    if (sortbar) {
+      const columns = sortbar.children;
+      if (columns[0]) columns[0].textContent = t('Compare', '比較');
+      if (columns[5]) columns[5].textContent = t('AI Last-Min', 'AI 晚鳥估價');
+    }
+
+    syncCompareButton();
+    updateSortButtons();
+    updateSummary();
+  }
+
   function bindEvents() {
     const elements = getElements();
     if (!elements.tab || !elements.results || !elements.compareBtn || !elements.form) {
@@ -202,6 +267,11 @@
     document.addEventListener('themechange', function () {
       renderFlights();
     });
+
+    document.addEventListener('langchange', function () {
+      applyStaticLanguage();
+      renderFlights();
+    });
   }
 
   function initialize() {
@@ -216,6 +286,7 @@
     bindEvents();
     state.currentQuery.departureDate = document.getElementById('fs-date')?.value || getDefaultDate();
     state.initialized = true;
+    applyStaticLanguage();
     renderFlights();
     return true;
   }

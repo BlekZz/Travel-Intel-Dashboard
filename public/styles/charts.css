@@ -19,6 +19,17 @@
   min-height: 350px;
 }
 
+.chart-container--fullyear {
+  min-height: 350px;
+}
+
+.chart-container canvas,
+.panel canvas {
+  display: block;
+  width: 100%;
+  min-height: 18rem;
+}
+
 .chart-container--heatmap {
   display: flex;
   flex-direction: column;

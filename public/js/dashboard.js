@@ -6,18 +6,19 @@
   const MAX_TRACKINGS = 5;
   const DIMENSION_KEYS = ['shopping', 'relaxation', 'luxury', 'food', 'sightseeing', 'value', 'festival'];
   const defaultDimensions = {
-    shopping: 0,
-    relaxation: 0,
-    luxury: 0,
-    food: 0,
-    sightseeing: 0,
-    value: 0,
-    festival: 0
+    shopping: 20,
+    relaxation: 15,
+    luxury: 10,
+    food: 25,
+    sightseeing: 15,
+    value: 10,
+    festival: 5
   };
 
   let activeTrackingId = null;
   let sliderTimeout = null;
   let latestFunScoreResponse = null;
+  let latestDashboardData = null;
 
   function appApi() {
     return window.TravelIntel && window.TravelIntel.app ? window.TravelIntel.app : null;
@@ -261,6 +262,18 @@
     })}`;
   }
 
+  function getDimensionLabels() {
+    return {
+      shopping: t('Shopping', '購物'),
+      relaxation: t('Relaxation', '渡假放鬆'),
+      luxury: t('Luxury', '奢侈享受'),
+      food: t('Food', '吃喝玩樂'),
+      sightseeing: t('Sightseeing', '觀光名勝'),
+      value: t('Value', '性價比'),
+      festival: t('Festival', '節慶活動')
+    };
+  }
+
   function updateDashboardTitle(track) {
     const titleEl = document.getElementById('dashboard-title');
     if (!titleEl || !track) return;
@@ -453,6 +466,7 @@
       .filter(([, value]) => value !== null)
       .sort((a, b) => b[1] - a[1])[0];
     const bestFor = topEntry ? topEntry[0] : null;
+    const dimensionLabels = getDimensionLabels();
     const badgeClass = getConfidenceClass(funScore && funScore.data_confidence);
     const badgeText = funScore && funScore.data_confidence === 'low'
       ? t('AI Score · Verify', 'AI 評分 · 請驗證')
@@ -460,7 +474,7 @@
     const note = options.note || (overall === null
       ? t('AI score unavailable', 'AI 評分暫時不可用')
       : bestFor
-        ? `${t('Best for', '適合')}: ${bestFor}`
+        ? `${t('Best for', '適合')}: ${dimensionLabels[bestFor] || bestFor}`
         : t('Awaiting better signal', '等待更多資料'));
 
     container.innerHTML = `
@@ -480,6 +494,26 @@
     renderFunScoreMetric(data && data.funScore ? data.funScore : {}, {
       note: meta && meta.partialData ? t('Dashboard using mixed live/fallback data', '目前使用混合 live/fallback 資料') : undefined
     });
+  }
+
+  function redrawLanguage() {
+    const active = getTrackingPayloadForActive();
+    if (active) {
+      updateDashboardTitle(active);
+      populateTrackingInputs(active);
+    }
+
+    renderTracking();
+    renderSliders();
+
+    if (latestDashboardData) {
+      renderMetrics(latestDashboardData);
+    } else {
+      renderFlightMetric({}, {});
+      renderHotelMetric({}, {});
+      renderWeatherMetric({}, {});
+      renderFunScoreMetric(latestFunScoreResponse || {}, {});
+    }
   }
 
   async function fetchDashboardData(track) {
@@ -506,6 +540,7 @@
       }
 
       const data = await res.json();
+      latestDashboardData = data;
       renderMetrics(data);
 
       const now = new Date().toISOString();
@@ -514,6 +549,7 @@
       updateDashboardTitle({ ...track, lastFetched: now });
     } catch (error) {
       showToast(t('Failed to load dashboard metrics', '載入 dashboard metrics 失敗'), 'error');
+      latestDashboardData = null;
       renderFlightMetric({}, { partialData: true });
       renderHotelMetric({}, { partialData: true });
       renderWeatherMetric({}, { partialData: true });
@@ -548,15 +584,7 @@
 
     const track = getTrackingPayloadForActive();
     const dims = track ? normalizeDimensions(track.dimensions) : cloneDefaultDimensions();
-    const labels = {
-      shopping: t('Shopping', '購物'),
-      relaxation: t('Relaxation', '渡假放鬆'),
-      luxury: t('Luxury', '奢侈享受'),
-      food: t('Food', '吃喝玩樂'),
-      sightseeing: t('Sightseeing', '觀光名勝'),
-      value: t('Value', '性價比'),
-      festival: t('Festival', '節慶活動')
-    };
+    const labels = getDimensionLabels();
 
     container.innerHTML = `<h4>${t('Fun Score Dimensions', '好玩指數維度')} <span id="slider-sum"></span></h4>`;
 
@@ -805,7 +833,8 @@
   window.TravelIntel = window.TravelIntel || {};
   window.TravelIntel.dashboard = {
     refresh,
-    getActiveDestination
+    getActiveDestination,
+    redrawLanguage
   };
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -831,4 +860,6 @@
 
     refresh(active && active.destination ? active.destination : DEFAULT_DESTINATION);
   });
+
+  document.addEventListener('langchange', redrawLanguage);
 })();

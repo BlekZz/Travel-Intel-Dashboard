@@ -1,0 +1,138 @@
+# Flight API Provider Strategy
+
+Last updated: 2026-05-19
+
+## Current Dilemma
+
+The original PRD assumed Amadeus Self-Service APIs would provide the primary flight and hotel data source. That assumption is no longer safe for new development:
+
+- Amadeus Self-Service new-user registration appears to be paused or unavailable.
+- Existing Self-Service access is reported to be in transition toward decommissioning.
+- Enterprise Amadeus access remains available, but it is not a practical free-tier path for this project.
+
+Because this dashboard needs real flight-search data for testing, Amadeus should be treated as a legacy or optional provider, not the primary path.
+
+## Current Solution
+
+Use SerpApi Google Flights as the primary provider for real flight-search testing.
+
+Primary:
+
+- `SERPAPI_API_KEY`
+- Provider name: `serpapi_google_flights`
+- Purpose: real flight search data, prices, durations, stops, airline data, and Google Flights-like results.
+
+Fallback:
+
+- `punitarani/fli`
+- Provider name: `fli_google_flights`
+- Purpose: local fallback for Google Flights-like data when SerpApi hits quota, times out, or returns provider-side errors.
+- Preferred integration mode: run `fli` as a local HTTP sidecar and call it from Node/Express.
+
+Deferred candidate:
+
+- `AWeirdDev/fast-flights`
+- Keep as a second fallback candidate, but do not implement immediately. It overlaps with `fli` in risk profile and would add extra normalization and deployment complexity.
+
+## Provider Priority
+
+```txt
+1. serpapi_google_flights
+2. fli_google_flights
+3. cached last-known-good response
+4. static demo/mock response with a provider warning
+```
+
+`fast-flights` can be added later as a third live provider if `fli` proves unreliable.
+
+## Required Architecture Changes
+
+Replace the single Amadeus-oriented service with a provider adapter layer:
+
+```txt
+services/flights/
+  index.js        # provider orchestration and fallback order
+  serpapi.js      # SerpApi Google Flights provider
+  fli.js          # punitarani/fli sidecar provider
+  normalize.js    # maps provider responses into the app contract
+  cache.js        # optional last-known-good fallback
+```
+
+Existing route behavior should remain stable:
+
+```txt
+GET /api/flights
+```
+
+The route should call the provider orchestrator instead of calling Amadeus directly.
+
+Fallback should trigger only for provider failures such as:
+
+- quota/rate limit responses
+- timeout
+- 5xx responses
+- invalid or empty provider payloads where a retry provider is meaningful
+
+The normalized response must preserve the existing frontend contract:
+
+```json
+{
+  "flights": [
+    {
+      "id": "string",
+      "airline": "string",
+      "airlineCode": "string",
+      "flightNumber": "string",
+      "type": "traditional|budget|regional",
+      "departureTime": "ISO datetime",
+      "arrivalTime": "ISO datetime",
+      "duration": "string",
+      "stops": 0,
+      "stopCities": [],
+      "price": 12500,
+      "currency": "TWD",
+      "cabin": "economy",
+      "baggage": "unknown",
+      "seatsRemaining": null
+    }
+  ]
+}
+```
+
+## Environment Variables
+
+Required now:
+
+```env
+SERPAPI_API_KEY=
+```
+
+Optional fallback:
+
+```env
+FLIGHT_FALLBACK_PROVIDER=fli
+FLI_COMMAND=fli
+FLI_MCP_URL=http://127.0.0.1:8000/mcp/
+```
+
+Legacy Amadeus keys can remain in `.env.example` for now, but should no longer block local testing.
+
+## Current Implementation Notes
+
+The first adapter layer is now implemented:
+
+```txt
+routes/flights.js
+  -> services/flights/index.js
+    -> services/flights/serpapi.js
+    -> services/flights/fli.js
+    -> services/flights/normalize.js
+```
+
+`fli` is currently integrated through its CLI because that is the simplest local fallback path for this Node/Express app:
+
+```txt
+fli flights TPE NRT 2026-08-01 --format json
+```
+
+The `FLI_MCP_URL` variable is reserved for a future HTTP sidecar implementation. For the next testing step, install `punitarani/fli` so `FLI_COMMAND` resolves on `PATH`, then fill `SERPAPI_API_KEY` and test `/api/flights`.
