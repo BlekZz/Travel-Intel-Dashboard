@@ -39,6 +39,13 @@ const ROUTE_DEFINITIONS = [
         requiredEnv: []
     },
     {
+        name: 'travelIntel',
+        modulePath: './routes/travelIntel',
+        mountPath: '/api',
+        endpoints: ['/travelintel'],
+        requiredEnv: []
+    },
+    {
         name: 'heatmap',
         modulePath: './routes/heatmap',
         mountPath: '/api',
@@ -50,6 +57,13 @@ const ROUTE_DEFINITIONS = [
         modulePath: './routes/bookingAdvice',
         mountPath: '/api',
         endpoints: ['/booking-advice'],
+        requiredEnv: []
+    },
+    {
+        name: 'quota',
+        modulePath: './routes/quota',
+        mountPath: '/api',
+        endpoints: ['/quota'],
         requiredEnv: []
     }
 ];

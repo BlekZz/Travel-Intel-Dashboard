@@ -1,4 +1,5 @@
 const { normalizeFlightList } = require('./normalize');
+const quotaTracker = require('../quotaTracker');
 
 const SERPAPI_URL = 'https://serpapi.com/search.json';
 
@@ -47,6 +48,11 @@ async function searchFlights(params = {}) {
   });
 
   const response = await fetch(`${SERPAPI_URL}?${query.toString()}`);
+  quotaTracker.recordProviderCall('serpapi', {
+    route: 'google_flights',
+    mode: 'live',
+    status: 'attempt'
+  });
   if (!response.ok) {
     const error = new Error(`SerpApi request failed: ${response.status} ${response.statusText}`);
     error.status = response.status;

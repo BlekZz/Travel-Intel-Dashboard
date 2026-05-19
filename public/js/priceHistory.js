@@ -4,6 +4,9 @@
   let controlsInitialized = false;
   let requestSequence = 0;
   let lastRenderedPayload = null;
+  let adviceRetryTimer = null;
+  let adviceRetryDeadline = 0;
+  let adviceRetryCount = 0;
 
   const state = {
     origin: 'TPE',
@@ -114,6 +117,24 @@
     return Array.isArray(value) ? value : [];
   }
 
+  function selectLocalizedText(value, fallback) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const preferred = getTextBundle().isZh ? value.zh : value.en;
+      const alternate = getTextBundle().isZh ? value.en : value.zh;
+      return preferred || alternate || fallback || '';
+    }
+    return value || fallback || '';
+  }
+
+  function selectLocalizedArray(value, fallback) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const preferred = getTextBundle().isZh ? value.zh : value.en;
+      const alternate = getTextBundle().isZh ? value.en : value.zh;
+      return safeArray(preferred).length ? preferred : (safeArray(alternate).length ? alternate : safeArray(fallback));
+    }
+    return safeArray(value).length ? safeArray(value) : safeArray(fallback);
+  }
+
   function isHttpSource(url) {
     return /^https?:\/\//i.test(String(url || ''));
   }
@@ -145,16 +166,16 @@
     if (!container) return;
 
     const controls = document.createElement('div');
-    controls.className = 'trip-search-bar';
+    controls.className = 'trip-search-bar trip-search-bar--compact';
     controls.id = 'ph-controls';
     controls.innerHTML = `
       <input type="text" id="ph-origin" placeholder="Origin" maxlength="3">
       <div class="search-divider"></div>
       <input type="text" id="ph-dest" placeholder="Dest" maxlength="3">
       <div class="search-divider"></div>
-      <input type="number" id="ph-year" min="2000" max="2100" placeholder="Year" style="max-width: 110px;">
+      <input type="number" id="ph-year" min="2000" max="2100" placeholder="Year">
       <div class="search-divider"></div>
-      <input type="number" id="ph-month" min="1" max="12" placeholder="Month" style="max-width: 110px;">
+      <input type="number" id="ph-month" min="1" max="12" placeholder="Month">
       <button id="ph-refresh-btn" class="btn btn--primary" type="button">Search</button>
     `;
 
@@ -266,7 +287,12 @@
       banner.classList.toggle('skeleton--row', isLoading);
       if (isLoading) {
         banner.className = 'advice-banner skeleton skeleton--row';
-        banner.innerHTML = `<div style="padding: 8px 0;">${texts.loading}</div>`;
+        banner.innerHTML = `
+          <div class="price-history-loading">
+            <div class="price-history-loading__title">${texts.loading}</div>
+            <div class="price-history-loading__subtitle">${texts.isZh ? '正在等待 Gemini 建議與歷史價格分析…' : 'Waiting for Gemini advice and historical pricing analysis…'}</div>
+          </div>
+        `;
       }
     }
 
@@ -287,7 +313,46 @@
         .filter((item) => Number.isFinite(item.month) && Number.isFinite(item.avgPrice)),
       data_confidence: payload?.data_confidence || 'medium',
       sources: safeArray(payload?.sources),
+      meta: payload?.meta || null,
     };
+  }
+
+  function clearAdviceRetry() {
+    if (adviceRetryTimer) {
+      clearInterval(adviceRetryTimer);
+      adviceRetryTimer = null;
+    }
+    adviceRetryDeadline = 0;
+  }
+
+  function getAdviceRetryState() {
+    if (!adviceRetryDeadline) return null;
+    return {
+      remainingMs: Math.max(0, adviceRetryDeadline - Date.now()),
+      active: Date.now() < adviceRetryDeadline
+    };
+  }
+
+  function scheduleAdviceRetry(delayMs) {
+    clearAdviceRetry();
+    adviceRetryDeadline = Date.now() + Math.max(1000, Number(delayMs || 30000));
+    adviceRetryTimer = setInterval(() => {
+      const retryState = getAdviceRetryState();
+      if (!retryState || retryState.remainingMs <= 0) {
+        clearAdviceRetry();
+        fetchData();
+        return;
+      }
+      if (lastRenderedPayload) {
+        renderAdviceBanner(lastRenderedPayload.adviceData, {
+          priceHistoryOk: lastRenderedPayload.priceHistoryOk,
+          trendOk: lastRenderedPayload.trendOk,
+          adviceOk: lastRenderedPayload.adviceOk,
+          combinedSources: lastRenderedPayload.combinedSources,
+          providerMeta: lastRenderedPayload.providerMeta
+        });
+      }
+    }, 1000);
   }
 
   function normalizeTrendPayload(payload) {
@@ -299,6 +364,7 @@
           avgHotelPrice: Number(item?.avgHotelPrice),
         }))
         .filter((item) => item.date && (Number.isFinite(item.avgFlightPrice) || Number.isFinite(item.avgHotelPrice))),
+      meta: payload?.meta || null,
     };
   }
 
@@ -310,8 +376,10 @@
       targetPriceTwd: Number.isFinite(Number(payload?.targetPriceTwd)) ? Number(payload.targetPriceTwd) : null,
       confidence: payload?.confidence || payload?.data_confidence || 'low',
       riskNotes: safeArray(payload?.riskNotes).filter(Boolean),
+      riskNotes_i18n: payload?.riskNotes_i18n || null,
       data_confidence: payload?.data_confidence || 'low',
       sources: safeArray(payload?.sources),
+      meta: payload?.meta || null,
     };
   }
 
@@ -320,6 +388,22 @@
       ...safeArray(priceHistoryResult?.sources),
       ...safeArray(adviceResult?.sources),
     ];
+  }
+
+  function mergeProviderMeta(priceHistoryMeta, trendMeta, adviceMeta) {
+    const candidates = [priceHistoryMeta, trendMeta, adviceMeta].filter((meta) => meta && typeof meta === 'object');
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    return {
+      provider: candidates[0].provider || 'unknown',
+      generatedAt: candidates.find((meta) => meta.generatedAt)?.generatedAt || null,
+      cached: candidates.some((meta) => Boolean(meta.cached)),
+      stale: candidates.some((meta) => Boolean(meta.stale)),
+      fallbackUsed: candidates.some((meta) => Boolean(meta.fallbackUsed)),
+      sourceTier: candidates.find((meta) => meta.sourceTier)?.sourceTier || null,
+    };
   }
 
   async function fetchData() {
@@ -355,13 +439,23 @@
         trendOk: trendResponse.ok,
         adviceOk: adviceResponse.ok,
         combinedSources: mergeSourceMetadata(priceHistoryData, adviceData),
+        providerMeta: mergeProviderMeta(priceHistoryData.meta, trendData.meta, adviceData.meta),
       };
+
+      if (adviceData.meta && adviceData.meta.fallbackUsed && Number(adviceData.meta.retryAfterMs || 0) > 0 && adviceRetryCount < 1) {
+        adviceRetryCount += 1;
+        scheduleAdviceRetry(adviceData.meta.retryAfterMs);
+      } else if (!adviceData.meta || !adviceData.meta.fallbackUsed) {
+        clearAdviceRetry();
+        adviceRetryCount = 0;
+      }
 
       renderAdviceBanner(adviceData, {
         priceHistoryOk: lastRenderedPayload.priceHistoryOk,
         trendOk: lastRenderedPayload.trendOk,
         adviceOk: lastRenderedPayload.adviceOk,
         combinedSources: lastRenderedPayload.combinedSources,
+        providerMeta: lastRenderedPayload.providerMeta,
       });
       renderYoyChart(priceHistoryData, priceHistoryResponse.ok);
       renderFullYearChart(trendData, adviceData, trendResponse.ok);
@@ -378,6 +472,7 @@
         trendOk: false,
         adviceOk: false,
         combinedSources: [],
+        providerMeta: null,
       };
 
       renderAdviceBanner(fallbackAdvice, {
@@ -409,9 +504,10 @@
     renderAdviceBanner(lastRenderedPayload.adviceData, {
       priceHistoryOk: lastRenderedPayload.priceHistoryOk,
       trendOk: lastRenderedPayload.trendOk,
-      adviceOk: lastRenderedPayload.adviceOk,
-      combinedSources: lastRenderedPayload.combinedSources,
-    });
+        adviceOk: lastRenderedPayload.adviceOk,
+        combinedSources: lastRenderedPayload.combinedSources,
+        providerMeta: lastRenderedPayload.providerMeta,
+      });
     renderYoyChart(lastRenderedPayload.priceHistoryData, lastRenderedPayload.priceHistoryOk);
     renderFullYearChart(lastRenderedPayload.trendData, lastRenderedPayload.adviceData, lastRenderedPayload.trendOk);
   }
@@ -434,6 +530,7 @@
     }
 
     const badge = getConfidenceBadge(data.data_confidence);
+    const providerBadges = buildProviderBadges(context.providerMeta);
     const fallbackFlags = [];
     if (!context.adviceOk) fallbackFlags.push('booking-advice');
     if (!context.priceHistoryOk) fallbackFlags.push('price-history');
@@ -448,65 +545,124 @@
         }).join(' · ')
       : `<span>${texts.noSources}</span>`;
 
-    const riskNotes = data.riskNotes.length
-      ? `<ul style="margin: 6px 0 0 18px; padding: 0;">${data.riskNotes.map((note) => `<li>${escapeHtml(note)}</li>`).join('')}</ul>`
+    const localizedRiskNotes = selectLocalizedArray(data.riskNotes_i18n, data.riskNotes);
+    const riskNotes = localizedRiskNotes.length
+      ? `<ul style="margin: 6px 0 0 18px; padding: 0;">${localizedRiskNotes.map((note) => `<li>${escapeHtml(note)}</li>`).join('')}</ul>`
       : `<span>${texts.noRiskNotes}</span>`;
 
     const fallbackNotice = fallbackFlags.length
       ? `<div style="margin-top: 8px; font-size: 0.8125rem; opacity: 0.85;">${texts.deterministicNote} (${escapeHtml(fallbackFlags.join(', '))})</div>`
       : `<div style="margin-top: 8px; font-size: 0.8125rem; opacity: 0.85;">${texts.deterministicNote}</div>`;
+    const retryState = getAdviceRetryState();
+    const retryLine = retryState && retryState.active
+      ? `<div class="retry-inline"><span class="badge badge--provider-warn">${escapeHtml(texts.isZh ? '即將重試 live' : 'Retrying live soon')}</span><span>${escapeHtml(texts.isZh ? `倒數 ${Math.ceil(retryState.remainingMs / 1000)} 秒` : `${Math.ceil(retryState.remainingMs / 1000)}s remaining`)}</span></div>`
+      : '';
+    const quotaNote = `<div class="subtle-note" title="${escapeHtml(texts.isZh ? '請避免連續刷新；booking advice 會優先使用快取並在冷卻後再試一次 live。' : 'Avoid repeated refreshes; booking advice prefers cache and retries live after cooldown.')}">${escapeHtml(texts.isZh ? '提示：避免頻繁刷新。若目前是 fallback 建議，系統會在 30 秒冷卻後再自動嘗試一次 live。' : 'Tip: avoid repeated refreshes. If the current advice is fallback-backed, the app will retry live once after a 30s cooldown.')}</div>`;
 
     banner.className = `advice-banner ${variantClass}`;
     banner.innerHTML = `
-      <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+      <div class="advice-banner__header">
         <div>
-          <div style="font-weight:700; margin-bottom:4px;">${escapeHtml(title)}</div>
-          <div style="font-size:0.875rem; opacity:0.9;">${texts.currentPriceLevel}: ${escapeHtml(data.currentPriceLevel || texts.unavailable)}</div>
+          <div class="advice-banner__title">${escapeHtml(title)}</div>
+          <div class="advice-banner__subtitle">${texts.currentPriceLevel}: ${escapeHtml(data.currentPriceLevel || texts.unavailable)}</div>
         </div>
-        <span class="${badge.className}">${escapeHtml(badge.label)}</span>
+        <div class="advice-banner__badge-group">
+          ${providerBadges}
+          <span class="${badge.className}">${escapeHtml(badge.label)}</span>
+        </div>
       </div>
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px 16px; margin-top:12px; font-size:0.9375rem;">
+      <div class="advice-banner__grid">
         <div><strong>${texts.bestBooking}:</strong> ${escapeHtml(formatWeeksBefore(data.bestBookingWeeksBefore, texts))}</div>
         <div><strong>${texts.targetPriceLabel}:</strong> ${escapeHtml(formatCurrency(data.targetPriceTwd))}</div>
         <div><strong>${texts.deviation}:</strong> ${escapeHtml(formatPercent(deviation))}</div>
       </div>
-      <div style="margin-top:10px; font-size:0.875rem;">
+      <div class="advice-banner__section">
         <strong>${texts.riskNotes}:</strong>
         ${riskNotes}
       </div>
-      <div style="margin-top:10px; font-size:0.8125rem; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+      <div class="advice-banner__sources">
         <strong>${texts.sources}:</strong> ${sourcesHtml}
       </div>
+      ${retryLine}
       ${fallbackNotice}
+      ${quotaNote}
     `;
+  }
+
+  function buildProviderBadges(meta) {
+    if (!meta) {
+      return '';
+    }
+
+    const badges = [];
+    badges.push(`<span class="badge badge--provider">${escapeHtml(renderProviderLabel(meta.provider))}</span>`);
+    if (meta.fallbackUsed) {
+      badges.push(`<span class="badge badge--provider-warn">${escapeHtml(getTextBundle().isZh ? '備援' : 'Fallback')}</span>`);
+    }
+    if (meta.cached) {
+      badges.push(`<span class="badge badge--provider">${escapeHtml(getTextBundle().isZh ? '快取' : 'Cached')}</span>`);
+    }
+    if (meta.stale) {
+      badges.push(`<span class="badge badge--provider-stale">${escapeHtml(getTextBundle().isZh ? '舊快照' : 'Stale')}</span>`);
+    }
+    return badges.join('');
+  }
+
+  function renderProviderLabel(provider) {
+    const value = String(provider || '').toLowerCase();
+    if (value.includes('serpapi')) return 'SerpApi';
+    if (value.includes('fli')) return 'fli';
+    if (value.includes('gemini')) return 'Gemini';
+    if (value.includes('sample')) return getTextBundle().isZh ? '樣本' : 'Sample';
+    return provider || 'unknown';
+  }
+
+  function renderGeneratedAt(value) {
+    const texts = getTextBundle();
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return texts.isZh ? '更新時間未知' : 'Updated time unavailable';
+    }
+
+    return `${texts.isZh ? '更新時間' : 'Updated'}: ${date.toLocaleString(texts.isZh ? 'zh-TW' : undefined, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })}`;
   }
 
   function ensureMetaElement(canvas, className) {
     const panel = canvas?.parentElement;
     if (!panel) return null;
+    panel.style.height = '380px';
+    panel.style.minHeight = '380px';
+    panel.style.overflow = 'hidden';
+    canvas.style.height = '100%';
+    canvas.style.maxHeight = '100%';
     let meta = panel.querySelector(`.${className}`);
     if (!meta) {
       meta = document.createElement('div');
-      meta.className = className;
-      meta.style.marginBottom = '12px';
-      meta.style.display = 'flex';
-      meta.style.justifyContent = 'space-between';
-      meta.style.alignItems = 'center';
-      meta.style.gap = '12px';
-      meta.style.flexWrap = 'wrap';
+      meta.className = `${className} chart-meta`;
       panel.insertBefore(meta, canvas);
     }
     return meta;
   }
 
-  function setChartMeta(canvas, className, title, badgeConfidence, detailText) {
+  function setChartMeta(canvas, className, badgeConfidence, detailText, providerMeta) {
     const meta = ensureMetaElement(canvas, className);
     if (!meta) return;
     const badge = getConfidenceBadge(badgeConfidence);
+    const providerBadges = buildProviderBadges(providerMeta);
+    const generatedText = providerMeta?.generatedAt ? renderGeneratedAt(providerMeta.generatedAt) : '';
     meta.innerHTML = `
-      <div style="font-weight:600;">${escapeHtml(title)}</div>
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <span style="font-size:0.8125rem; opacity:0.8;">${escapeHtml(detailText)}</span>
+      <div class="chart-meta__primary">
+        <span class="chart-meta__detail">${escapeHtml(detailText)}</span>
+        ${generatedText ? `<span class="chart-meta__detail">${escapeHtml(generatedText)}</span>` : ''}
+      </div>
+      <div class="chart-meta__badges">
+        ${providerBadges}
         <span class="${badge.className}">${escapeHtml(badge.label)}</span>
       </div>
     `;
@@ -554,15 +710,9 @@
     const labels = texts.isZh ? MONTH_LABELS_ZH : MONTH_LABELS_EN;
     const hasData = currentYearData.some(Number.isFinite) || priorYearData.some(Number.isFinite);
 
-    setChartMeta(
-      canvas,
-      'price-history-yoy-meta',
-      texts.yoyTitle,
-      data.data_confidence || 'medium',
-      hasData
-        ? `${texts.currentYear}: ${formatCurrency(currentAverage)} · ${texts.priorYear}: ${formatCurrency(priorAverage)}`
-        : `${texts.noYoyData}${isOk ? '' : ` · ${texts.fallback}`}`
-    );
+    setChartMeta(canvas, 'price-history-yoy-meta', data.data_confidence || 'medium', hasData
+      ? `${texts.currentYear}: ${formatCurrency(currentAverage)} · ${texts.priorYear}: ${formatCurrency(priorAverage)}`
+      : `${texts.noYoyData}${isOk ? '' : ` · ${texts.fallback}`}`, data.meta);
 
     destroyChart(yoyChartInstance);
 
@@ -681,15 +831,9 @@
     const targetPrice = Number.isFinite(adviceData.targetPriceTwd) ? adviceData.targetPriceTwd : null;
     const averageWeekly = average(weeklySeries);
 
-    setChartMeta(
-      canvas,
-      'price-history-fullyear-meta',
-      texts.fullyearTitle,
-      adviceData.data_confidence || 'low',
-      hasData
-        ? `${texts.currentYear}: ${formatCurrency(averageWeekly)} · ${texts.targetPriceLabel}: ${formatCurrency(targetPrice)}`
-        : `${texts.noTrendData}${isOk ? '' : ` · ${texts.fallback}`}`
-    );
+    setChartMeta(canvas, 'price-history-fullyear-meta', adviceData.data_confidence || 'low', hasData
+      ? `${texts.currentYear}: ${formatCurrency(averageWeekly)} · ${texts.targetPriceLabel}: ${formatCurrency(targetPrice)}`
+      : `${texts.noTrendData}${isOk ? '' : ` · ${texts.fallback}`}`, trendData.meta);
 
     destroyChart(fullYearChartInstance);
 
@@ -794,11 +938,17 @@
   });
 
   document.addEventListener('themechange', () => {
-    if (document.getElementById('chart-yoy')) {
-      renderYoyChart(normalizePriceHistoryPayload({ currentYear: [], priorYear: [] }), true);
-    }
-    if (document.getElementById('chart-fullyear')) {
-      renderFullYearChart(normalizeTrendPayload({ trend: [] }), normalizeAdvicePayload(null), true);
+    if (lastRenderedPayload) {
+      renderAdviceBanner(lastRenderedPayload.adviceData, {
+        priceHistoryOk: lastRenderedPayload.priceHistoryOk,
+        trendOk: lastRenderedPayload.trendOk,
+        adviceOk: lastRenderedPayload.adviceOk,
+        combinedSources: lastRenderedPayload.combinedSources,
+        providerMeta: lastRenderedPayload.providerMeta,
+      });
+      renderYoyChart(lastRenderedPayload.priceHistoryData, lastRenderedPayload.priceHistoryOk);
+      renderFullYearChart(lastRenderedPayload.trendData, lastRenderedPayload.adviceData, lastRenderedPayload.trendOk);
+      return;
     }
     fetchData();
   });

@@ -49,7 +49,7 @@
 <body>
   <div class="container">
     <header class="app-header">
-      <h1 class="app-title">Travel Intel</h1>
+      <h1 class="app-title">travelintel</h1>
       <nav class="app-nav" aria-label="Primary">
           <button id="nav-dashboard" class="nav-btn active" type="button" role="tab" aria-controls="tab-dashboard" aria-selected="true">Dashboard</button>
           <button id="nav-flights" class="nav-btn" type="button" role="tab" aria-controls="tab-flights" aria-selected="false">Flights</button>
@@ -84,21 +84,21 @@
           <button id="dash-search-btn" class="btn btn--primary" type="button" data-i18n="search">Search</button>
         </div>
 
-        <div class="metrics-grid">
+        <div class="metrics-grid metrics-grid--dashboard">
+            <div id="metric-fun-score"></div>
             <div id="metric-flight-price"></div>
             <div id="metric-hotel-price"></div>
             <div id="metric-weather"></div>
-            <div id="metric-fun-score"></div>
         </div>
 
-        <div class="dashboard-grid">
-           <div class="panel" id="slider-container"></div>
-           <div class="panel">
+        <div class="dashboard-stack">
+           <div class="panel panel--chart panel--trend">
                <canvas id="chart-trend"></canvas>
            </div>
+           <div class="panel panel--travelintel" id="slider-container"></div>
         </div>
 
-        <div class="panel mt-lg">
+        <div class="panel panel--heatmap mt-lg">
             <div id="chart-heatmap"></div>
         </div>
     </section>
@@ -112,8 +112,8 @@
     <!-- Price History Tab -->
     <section id="tab-price-history" class="tab-panel" role="tabpanel" aria-labelledby="nav-price-history" hidden>
         <div id="advice-banner" class="advice-banner"></div>
-        <div class="panel mt-md"><canvas id="chart-yoy"></canvas></div>
-        <div class="panel mt-md"><canvas id="chart-fullyear"></canvas></div>
+        <div class="panel panel--chart panel--price-history mt-md"><canvas id="chart-yoy"></canvas></div>
+        <div class="panel panel--chart panel--price-history mt-md"><canvas id="chart-fullyear"></canvas></div>
     </section>
   </div>
 

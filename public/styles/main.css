@@ -248,16 +248,13 @@ button {
   margin-bottom: var(--spacing-lg);
 }
 
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);
-  gap: var(--spacing-lg);
+.metrics-grid--dashboard > * {
+  min-height: 100%;
 }
 
-@media (max-width: 1024px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
+.dashboard-stack {
+  display: grid;
+  gap: var(--spacing-lg);
 }
 
 .panel {
@@ -269,6 +266,23 @@ button {
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+
+.panel--chart {
+  min-height: 380px;
+}
+
+.panel--price-history {
+  min-height: 380px;
+  overflow: hidden;
+}
+
+.panel--travelintel {
+  overflow: hidden;
+}
+
+.panel--heatmap {
+  overflow: hidden;
 }
 
 .panel > * + * {
@@ -331,6 +345,24 @@ button {
   font-family: inherit;
   outline: none;
   color: var(--color-text-primary);
+}
+
+.trip-search-bar input[type='date'] {
+  min-width: 168px;
+  padding-right: 40px;
+}
+
+.trip-search-bar--compact input[type='date'] {
+  min-width: 176px;
+}
+
+.trip-search-bar--compact input,
+.trip-search-bar--compact select {
+  min-width: 132px;
+}
+
+.trip-search-bar--compact .btn {
+  flex: 0 0 auto;
 }
 
 .trip-search-bar .search-divider {

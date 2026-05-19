@@ -1,0 +1,86 @@
+{
+  "providers": {
+    "gemini": {
+      "label": "Gemini 2.5 Flash",
+      "docs": [
+        "https://ai.google.dev/gemini-api/docs/rate-limits",
+        "https://ai.google.dev/gemini-api/docs/pricing"
+      ],
+      "limits": {
+        "requestsPerMinute": 10,
+        "requestsPerDay": 250,
+        "groundedRequestsPerDay": 500
+      },
+      "resetPolicy": {
+        "type": "daily",
+        "timezone": "America/Los_Angeles",
+        "note": "Official Gemini free-tier RPD resets at midnight Pacific time."
+      },
+      "notes": [
+        "This project defaults to gemini-2.5-flash.",
+        "Grounding with Google Search has its own free allowance and may differ from generic text generation."
+      ]
+    },
+    "serpapi": {
+      "label": "SerpApi Google Flights",
+      "docs": [
+        "https://us-west.serpapi.com/",
+        "https://serpapi.com/google-flights-api"
+      ],
+      "limits": {
+        "searchesPerMonth": 250,
+        "cacheTtlMinutes": 60
+      },
+      "resetPolicy": {
+        "type": "monthly",
+        "timezone": "UTC",
+        "note": "Cached identical searches are free and do not count against monthly search credits."
+      },
+      "notes": [
+        "Free plan shows 250 searches per month on SerpApi pricing.",
+        "Cached identical queries are free per SerpApi docs."
+      ]
+    },
+    "openweathermap": {
+      "label": "OpenWeatherMap",
+      "docs": [
+        "https://openweathermap.org/price",
+        "https://openweathermap.org/api"
+      ],
+      "limits": {
+        "callsPerDay": 1000
+      },
+      "resetPolicy": {
+        "type": "daily",
+        "timezone": "UTC",
+        "note": "OpenWeatherMap pricing page states the first 1,000 API calls per day are free."
+      },
+      "notes": [
+        "This dashboard currently uses current weather and short forecast endpoints only."
+      ]
+    }
+  },
+  "uiPolicies": {
+    "funScore": {
+      "cooldownMs": 15000,
+      "fallbackRetryAfterMs": 15000,
+      "maxAutoRetries": 1
+    },
+    "bookingAdvice": {
+      "cooldownMs": 30000,
+      "fallbackRetryAfterMs": 30000,
+      "maxAutoRetries": 1
+    },
+    "travelIntel": {
+      "cooldownMs": 30000,
+      "fallbackRetryAfterMs": 30000,
+      "maxAutoRetries": 1
+    },
+    "flights": {
+      "cooldownMs": 15000
+    },
+    "dashboard": {
+      "cooldownMs": 15000
+    }
+  }
+}

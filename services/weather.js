@@ -1,4 +1,5 @@
 const fetch = require('node-fetch');
+const quotaTracker = require('./quotaTracker');
 
 const API_KEY = process.env.OPENWEATHERMAP_API_KEY;
 const BASE_URL = 'https://api.openweathermap.org/data/2.5';
@@ -138,6 +139,11 @@ async function fetchWeatherEndpoint(endpoint, query, extraParams = {}) {
         ...extraParams
     });
 
+    quotaTracker.recordProviderCall('openweathermap', {
+        route: endpoint,
+        mode: 'live',
+        status: 'attempt'
+    });
     const res = await fetch(`${BASE_URL}/${endpoint}?${params.toString()}`);
     const data = await res.json();
 

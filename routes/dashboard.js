@@ -2,22 +2,13 @@ const express = require('express');
 const router = express.Router();
 const amadeus = require('../services/amadeus');
 const weather = require('../services/weather');
-const gemini = require('../services/gemini');
+const flightSnapshot = require('../services/flights/snapshot');
 
 const DEFAULT_ORIGIN = 'TPE';
 const DEFAULT_DESTINATION = 'NRT';
 const DEFAULT_DATE_RANGE = Object.freeze({
   start: '2025-08-01',
   end: '2025-08-07'
-});
-const DEFAULT_FUN_SCORE_DIMENSIONS = Object.freeze({
-  shopping: 15,
-  relaxation: 15,
-  luxury: 10,
-  food: 20,
-  sightseeing: 20,
-  value: 10,
-  festival: 10
 });
 
 function parseDateRange(rawDateRange) {
@@ -88,14 +79,6 @@ function normalizeWeatherSummary(currentWeather) {
   };
 }
 
-function normalizeFunScoreSummary(funScorePayload) {
-  return {
-    overall: roundNumber(funScorePayload?.score),
-    breakdown: funScorePayload?.dimension_scores || {},
-    data_confidence: funScorePayload?.data_confidence || 'low'
-  };
-}
-
 function buildSourceEntry(provider, options = {}) {
   return {
     provider,
@@ -116,40 +99,64 @@ router.get('/dashboard', async (req, res) => {
   const fallbackMessages = [];
 
   const [
-    metricsResult,
+    currentFlightSnapshotResult,
+    previousFlightSnapshotResult,
     hotelsResult,
-    weatherResult,
-    funScoreResult
+    weatherResult
   ] = await Promise.allSettled([
-    amadeus.getPriceMetrics(origin, destination, dateRange),
-    amadeus.searchHotels(buildHotelSearchParams(destination, dateRange)),
-    weather.getCurrentWeather(destination),
-    gemini.computeFunScore(DEFAULT_FUN_SCORE_DIMENSIONS, {
-      destination,
+    flightSnapshot.getFlightSnapshot({
       origin,
-      dateRange,
-      surface: 'dashboard-summary'
-    })
+      destination,
+      departureDate: dateRange.start,
+      cabin: 'economy',
+      maxStops: '1',
+      currency: 'TWD'
+    }),
+    flightSnapshot.getFlightSnapshot({
+      origin,
+      destination,
+      departureDate: flightSnapshot.addMonths(dateRange.start, -1),
+      cabin: 'economy',
+      maxStops: '1',
+      currency: 'TWD'
+    }),
+    amadeus.searchHotels(buildHotelSearchParams(destination, dateRange)),
+    weather.getCurrentWeather(destination)
   ]);
 
-  const metrics = metricsResult.status === 'fulfilled' ? metricsResult.value : null;
-  if (metricsResult.status === 'fulfilled') {
-    const metricsFallback = !process.env.AMADEUS_API_KEY || !process.env.AMADEUS_API_SECRET;
-    if (metricsFallback) {
-      fallbackMessages.push('Flight metrics are using service fallback because Amadeus credentials are unavailable.');
+  const currentFlightSnapshot = currentFlightSnapshotResult.status === 'fulfilled' ? currentFlightSnapshotResult.value : null;
+  const previousFlightSnapshot = previousFlightSnapshotResult.status === 'fulfilled' ? previousFlightSnapshotResult.value : null;
+  const avgFlightPrice = roundNumber(currentFlightSnapshot?.avgPrice);
+  const previousAvgFlightPrice = Number(previousFlightSnapshot?.avgPrice);
+  const flightPriceDelta = Number.isFinite(previousAvgFlightPrice) && previousAvgFlightPrice > 0 && avgFlightPrice !== null
+    ? roundNumber(((avgFlightPrice - previousAvgFlightPrice) / previousAvgFlightPrice) * 100, 1)
+    : null;
+
+  if (currentFlightSnapshotResult.status === 'fulfilled') {
+    const flightMeta = currentFlightSnapshot.meta || {};
+    if (flightMeta.fallbackUsed || flightMeta.stale || flightMeta.cached) {
+      fallbackMessages.push('Flight metrics are aligned to the flight provider snapshot and may be cached, stale, or fallback-backed.');
     }
-    sources.push(buildSourceEntry('amadeus.priceMetrics', {
+    sources.push(buildSourceEntry('flights.snapshot', {
       status: 'ok',
-      fallback: metricsFallback,
-      message: metricsFallback ? 'Service fallback payload in use.' : 'Live service payload returned.',
-      details: { origin, destination, dateRange }
+      fallback: Boolean(flightMeta.fallbackUsed || flightMeta.stale),
+      message: `Flight metrics derived from ${flightMeta.provider || 'unknown'} snapshot.`,
+      details: {
+        origin,
+        destination,
+        departureDate: dateRange.start,
+        provider: flightMeta.provider,
+        cached: Boolean(flightMeta.cached),
+        stale: Boolean(flightMeta.stale),
+        generatedAt: flightMeta.generatedAt
+      }
     }));
   } else {
     fallbackMessages.push('Flight metrics unavailable; returning null-safe dashboard fields.');
-    sources.push(buildSourceEntry('amadeus.priceMetrics', {
+    sources.push(buildSourceEntry('flights.snapshot', {
       status: 'error',
       fallback: true,
-      message: metricsResult.reason?.message || 'Price metrics aggregation failed.',
+      message: currentFlightSnapshotResult.reason?.message || 'Flight snapshot aggregation failed.',
       details: { origin, destination, dateRange }
     }));
   }
@@ -208,35 +215,12 @@ router.get('/dashboard', async (req, res) => {
     }));
   }
 
-  const funScorePayload = funScoreResult.status === 'fulfilled'
-    ? funScoreResult.value
-    : gemini.buildFunScoreFallback(DEFAULT_FUN_SCORE_DIMENSIONS, {
-        note: 'Dashboard aggregation fell back to a contract-safe fun score payload.',
-        data_confidence: 'low'
-      });
-  const funScoreFallback = funScoreResult.status !== 'fulfilled' || !process.env.GEMINI_API_KEY || funScorePayload?.data_confidence === 'low';
-  if (funScoreFallback) {
-    fallbackMessages.push('Fun score is using contract-safe fallback or low-confidence AI output.');
-  }
-  sources.push(buildSourceEntry('gemini.funScore', {
-    status: funScoreResult.status === 'fulfilled' ? 'ok' : 'error',
-    fallback: funScoreFallback,
-    message: funScoreResult.status === 'fulfilled'
-      ? (funScoreFallback ? 'Fallback or low-confidence fun score payload in use.' : 'Live Gemini payload returned.')
-      : (funScoreResult.reason?.message || 'Fun score aggregation failed.'),
-    details: {
-      destination,
-      confidence: funScorePayload?.data_confidence || 'low'
-    }
-  }));
-
-  const responsePayload = {
-    avgFlightPrice: roundNumber(metrics?.avgFlightPrice),
+  res.json({
+    avgFlightPrice,
     avgHotelPrice: roundNumber(avgHotelPrice),
-    flightPriceDelta: roundNumber(metrics?.flightPriceDelta, 1),
+    flightPriceDelta,
     hotelPriceDelta: 0,
     weather: weatherSummary,
-    funScore: normalizeFunScoreSummary(funScorePayload),
     meta: {
       origin,
       destination,
@@ -244,15 +228,10 @@ router.get('/dashboard', async (req, res) => {
       generatedAt: new Date().toISOString(),
       fallbackMessages,
       partialData: sources.some((entry) => entry.fallback),
-      sources
+      sources,
+      travelIntelRefreshKey: JSON.stringify({ destination, dateRange })
     }
-  };
-
-  if (avgHotelPrice === null) {
-    responsePayload.hotelPriceDelta = 0;
-  }
-
-  res.json(responsePayload);
+  });
 });
 
 module.exports = router;

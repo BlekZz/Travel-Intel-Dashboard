@@ -15,6 +15,8 @@
   let activeTabId = 'dashboard';
   let booted = false;
   const subscribers = new Set();
+  let quotaSnapshot = null;
+  let quotaRefreshTimer = null;
 
   window.TravelIntel = window.TravelIntel || {};
 
@@ -56,6 +58,78 @@
         }
       }, 300);
     }, 3000);
+  }
+
+  function getQuotaBarContainer() {
+    return document.getElementById('quota-status-bar');
+  }
+
+  function formatQuotaLine(label, used, remaining, suffix) {
+    const parts = [`${label}: ${used}${suffix ? ` ${suffix}` : ''}`];
+    if (remaining !== null && remaining !== undefined) {
+      parts.push(`left ${remaining}`);
+    }
+    return parts.join(' · ');
+  }
+
+  function renderQuotaBar() {
+    const container = getQuotaBarContainer();
+    if (!container) return;
+    if (!quotaSnapshot || !quotaSnapshot.providers) {
+      container.innerHTML = '';
+      return;
+    }
+
+    const providers = quotaSnapshot.providers;
+    const lines = [];
+    if (providers.gemini) {
+      lines.push(formatQuotaLine('Gemini', providers.gemini.usage.dayUsed, providers.gemini.remaining.requestsPerDay, 'today'));
+    }
+    if (providers.serpapi) {
+      lines.push(formatQuotaLine('SerpApi', providers.serpapi.usage.monthUsed, providers.serpapi.remaining.searchesPerMonth, 'this month'));
+    }
+    if (providers.openweathermap) {
+      lines.push(formatQuotaLine('OpenWeather', providers.openweathermap.usage.dayUsed, providers.openweathermap.remaining.callsPerDay, 'today'));
+    }
+
+    const title = [
+      'Avoid repeated manual refreshes.',
+      'Gemini limits vary by model/tier; this bar shows locally tracked usage plus configured free-tier references.',
+      'SerpApi cached identical searches are free per provider docs.'
+    ].join(' ');
+
+    container.innerHTML = `
+      <div class="quota-bar" title="${title}">
+        <span class="quota-bar__label">Quota</span>
+        <span class="quota-bar__text">${lines.join(' | ')}</span>
+      </div>
+    `;
+  }
+
+  async function refreshQuota(options = {}) {
+    try {
+      const response = await fetch('/api/quota');
+      if (!response.ok) {
+        throw new Error(`Quota request failed (${response.status})`);
+      }
+      quotaSnapshot = await response.json();
+      renderQuotaBar();
+      return quotaSnapshot;
+    } catch (error) {
+      if (!options.silent) {
+        console.error('Quota refresh failed:', error);
+      }
+      return quotaSnapshot;
+    }
+  }
+
+  function scheduleQuotaPolling() {
+    if (quotaRefreshTimer) {
+      clearInterval(quotaRefreshTimer);
+    }
+    quotaRefreshTimer = setInterval(() => {
+      refreshQuota({ silent: true });
+    }, 60000);
   }
 
   function normalizeDestination(value) {
@@ -358,7 +432,11 @@
     showToast,
     switchTab,
     applyLang,
-    isChinese
+    isChinese,
+    getQuotaSnapshot() {
+      return quotaSnapshot;
+    },
+    refreshQuota
   };
 
   window.TravelIntel.app = appState;
@@ -393,8 +471,16 @@
     }
 
     applyLang();
+    const header = document.querySelector('.app-header');
+    if (header && !getQuotaBarContainer()) {
+      const quotaHost = document.createElement('div');
+      quotaHost.id = 'quota-status-bar';
+      header.insertAdjacentElement('afterend', quotaHost);
+    }
     setCurrentDestination(resolveInitialDestination(), { silent: true, force: true });
     booted = true;
+    refreshQuota({ silent: true });
+    scheduleQuotaPolling();
     switchTab(activeTabId, { refresh: true, force: true });
   });
 })();

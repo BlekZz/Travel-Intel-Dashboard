@@ -1,24 +1,16 @@
 const express = require('express');
 const router = express.Router();
-
-function hashString(input) {
-  let hash = 2166136261;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
+const flightSnapshot = require('../services/flights/snapshot');
 
 function isLeapYear(year) {
   return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
 }
 
-function buildHeatmapDays(destination, year, type) {
+function buildHeatmapDays(destination, year, type, snapshot) {
   const totalDays = isLeapYear(year) ? 366 : 365;
   const startDate = new Date(Date.UTC(year, 0, 1));
-  const routeSeed = hashString(`${destination}:${year}:${type}:heatmap`);
-  const basePrice = 7800 + (routeSeed % 4200);
+  const routeSeed = snapshot?.signature || flightSnapshot.hashString(`${destination}:${year}:${type}:heatmap`);
+  const basePrice = Math.round(snapshot?.avgPrice || (7800 + (routeSeed % 4200)));
   const seasonalBands = [1.02, 0.97, 0.93, 0.96, 1.01, 1.08, 1.18, 1.22, 1.07, 1.0, 0.95, 1.04];
   const days = [];
 
@@ -27,7 +19,7 @@ function buildHeatmapDays(destination, year, type) {
     current.setUTCDate(startDate.getUTCDate() + index);
     const date = current.toISOString().split('T')[0];
     const month = current.getUTCMonth();
-    const daySeed = hashString(`${destination}:${type}:${date}`);
+    const daySeed = flightSnapshot.hashString(`${destination}:${type}:${routeSeed}:${date}`);
     const weeklyBias = ((index + (type === 'return' ? 2 : 0)) % 7) - 3;
     const price = Math.round(
       basePrice * seasonalBands[month]
@@ -59,13 +51,30 @@ router.get('/heatmap', async (req, res) => {
     const { destination = 'NRT', year, type = 'outbound' } = req.query;
     const targetYear = Number.parseInt(year, 10) || new Date().getUTCFullYear();
     const normalizedType = type === 'return' ? 'return' : 'outbound';
-    const days = buildHeatmapDays(destination, targetYear, normalizedType);
+    const anchorDate = `${targetYear}-08-15`;
+    const snapshot = await flightSnapshot.getFlightSnapshot({
+      origin: 'TPE',
+      destination,
+      departureDate: anchorDate,
+      cabin: 'economy',
+      maxStops: '1',
+      currency: 'TWD'
+    });
+    const days = buildHeatmapDays(destination, targetYear, normalizedType, snapshot);
 
     res.json({
       destination,
       year: targetYear,
       type: normalizedType,
-      days
+      days,
+      meta: {
+        generatedAt: snapshot.meta?.generatedAt || new Date().toISOString(),
+        provider: snapshot.meta?.provider || 'deterministic_sample',
+        cached: Boolean(snapshot.meta?.cached),
+        stale: Boolean(snapshot.meta?.stale),
+        fallbackUsed: Boolean(snapshot.meta?.fallbackUsed),
+        anchorDate
+      }
     });
   } catch (error) {
     console.error('Error in /api/heatmap:', error);

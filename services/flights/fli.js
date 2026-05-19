@@ -1,4 +1,5 @@
 const { execFile } = require('child_process');
+const path = require('path');
 const { normalizeFlightList } = require('./normalize');
 
 const DEFAULT_TIMEOUT_MS = 45000;
@@ -16,19 +17,61 @@ function mapCabin(cabin) {
 }
 
 function mapStops(maxStops) {
-  if (maxStops === '0' || maxStops === 0) return 'NON_STOP';
-  if (maxStops === '1' || maxStops === 1) return 'ONE_STOP';
+  if (maxStops === '0' || maxStops === 0) return '0';
+  if (maxStops === '1' || maxStops === 1) return '1';
   return 'ANY';
 }
 
+function looksLikePythonCommand(command) {
+  const normalized = path.basename(String(command || '')).toLowerCase();
+  return normalized === 'python' || normalized === 'python.exe' || normalized === 'py' || normalized === 'py.exe';
+}
+
+function resolveFliInvocation() {
+  const configuredCommand = process.env.FLI_COMMAND;
+  if (configuredCommand) {
+    if (looksLikePythonCommand(configuredCommand)) {
+      return {
+        command: configuredCommand,
+        preArgs: ['-m', 'fli.cli.main']
+      };
+    }
+
+    return {
+      command: configuredCommand,
+      preArgs: []
+    };
+  }
+
+  if (process.platform === 'win32' && process.env.APPDATA) {
+    return {
+      command: path.join(process.env.APPDATA, 'Python', 'Python313', 'Scripts', 'fli.exe'),
+      preArgs: []
+    };
+  }
+
+  return {
+    command: 'fli',
+    preArgs: []
+  };
+}
+
 function runFli(args) {
-  const command = process.env.FLI_COMMAND || 'fli';
+  const { command, preArgs } = resolveFliInvocation();
 
   return new Promise((resolve, reject) => {
-    execFile(command, args, {
+    execFile(command, [...preArgs, ...args], {
       timeout: Number(process.env.FLI_TIMEOUT_MS || DEFAULT_TIMEOUT_MS),
       windowsHide: true,
-      maxBuffer: 1024 * 1024 * 4
+      maxBuffer: 1024 * 1024 * 4,
+      env: {
+        ...process.env,
+        HTTP_PROXY: '',
+        HTTPS_PROXY: '',
+        ALL_PROXY: '',
+        GIT_HTTP_PROXY: '',
+        GIT_HTTPS_PROXY: ''
+      }
     }, (error, stdout, stderr) => {
       if (error) {
         error.message = stderr ? `${error.message}: ${stderr}` : error.message;
@@ -54,11 +97,7 @@ function buildArgs(params = {}) {
     '--stops',
     mapStops(params.maxStops),
     '--currency',
-    params.currency || 'TWD',
-    '--language',
-    params.language || 'zh-TW',
-    '--country',
-    params.country || 'TW'
+    params.currency || 'TWD'
   ];
 
   if (params.returnDate) {

@@ -11,6 +11,7 @@
   const state = {
     initialized: false,
     flights: [],
+    requestMeta: null,
     currentQuery: { ...DEFAULT_QUERY },
     sortKey: 'price',
     sortDirection: 'asc',
@@ -84,7 +85,8 @@
       summary: document.getElementById('fs-summary'),
       modal: document.getElementById('compare-modal-wrapper'),
       modalBody: document.getElementById('compare-body'),
-      modalClose: document.getElementById('compare-close')
+      modalClose: document.getElementById('compare-close'),
+      meta: document.getElementById('fs-meta')
     };
   }
 
@@ -100,7 +102,7 @@
     if (!document.getElementById('fs-form')) {
       const formMarkup = `
         <div id="fs-shell" style="display:grid; gap:var(--spacing-md); margin-bottom:var(--spacing-md);">
-          <form id="fs-form" class="trip-search-bar" novalidate>
+          <form id="fs-form" class="trip-search-bar trip-search-bar--compact" novalidate>
             <input type="text" id="fs-origin" placeholder="${escapeHtml(t('Origin (e.g. TPE)', '出發地 (例：TPE)'))}" maxlength="3" value="${escapeHtml(DEFAULT_QUERY.origin)}" required>
             <div class="search-divider"></div>
             <input type="text" id="fs-dest" placeholder="${escapeHtml(t('Destination (e.g. NRT)', '目的地 (例：NRT)'))}" maxlength="3" value="${escapeHtml(DEFAULT_QUERY.destination)}" required>
@@ -134,7 +136,11 @@
               <button type="button" class="badge" id="flt-budget" data-filter-chip="budget" aria-pressed="false">${escapeHtml(t('Budget', '廉航'))}</button>
               <button type="button" class="badge" id="flt-baggage" data-filter-chip="baggage" aria-pressed="false">${escapeHtml(t('With Baggage', '含行李'))}</button>
             </div>
-            <div id="fs-summary" style="font-size:0.875rem; color:var(--color-text-secondary);"></div>
+            <div style="display:grid; gap:4px; justify-items:end;">
+              <div id="fs-summary" style="font-size:0.875rem; color:var(--color-text-secondary);"></div>
+              <div id="fs-meta" class="provider-meta"></div>
+              <div class="subtle-note" title="${escapeHtml(t('Repeated refreshes can consume SerpApi free searches quickly. Cached identical queries are cheaper and safer.', '頻繁刷新會快速消耗 SerpApi 免費額度。相同查詢優先吃快取會更安全。'))}">${escapeHtml(t('Tip: avoid repeated refreshes. Cached identical searches are safer for quota.', '提示：請避免頻繁刷新；相同查詢優先走快取比較安全。'))}</div>
+            </div>
           </div>
 
           <div id="fs-sortbar" style="display:grid; grid-template-columns:72px minmax(170px,1.3fr) minmax(160px,1fr) minmax(140px,0.9fr) minmax(120px,0.8fr) minmax(140px,0.9fr); gap:var(--spacing-sm); align-items:center; padding:var(--spacing-sm) var(--spacing-md); border-radius:var(--radius-card); background:var(--color-surface); color:var(--color-text-secondary); font-size:0.875rem; font-weight:600;">
@@ -238,6 +244,7 @@
     syncCompareButton();
     updateSortButtons();
     updateSummary();
+    updateMeta();
   }
 
   function bindEvents() {
@@ -438,6 +445,7 @@
     state.lastAppliedDestination = query.destination;
     state.requestStatus = 'loading';
     state.requestError = null;
+    state.requestMeta = null;
     state.selectedIds = [];
     state.expandedIds.clear();
     renderFlights();
@@ -458,11 +466,12 @@
       state.flights = Array.isArray(payload.flights)
         ? payload.flights.map(normalizeFlightRecord)
         : [];
+      state.requestMeta = normalizeRequestMeta(payload.meta);
       state.requestStatus = 'success';
       state.requestError = null;
       renderFlights();
     } catch (error) {
-      state.flights = [];
+      state.requestMeta = null;
       state.requestStatus = error.status === 503 ? 'unavailable' : 'error';
       state.requestError = {
         status: error.status || 0,
@@ -503,6 +512,21 @@
       baggage: flight.baggage || '0kg',
       seatsRemaining: Number.isFinite(Number(flight.seatsRemaining)) ? Number(flight.seatsRemaining) : null,
       aiEstimate: estimateAiPrice(flight)
+    };
+  }
+
+  function normalizeRequestMeta(meta) {
+    if (!meta || typeof meta !== 'object') {
+      return null;
+    }
+
+    return {
+      provider: String(meta.provider || 'unknown'),
+      fallbackUsed: Boolean(meta.fallbackUsed),
+      cached: Boolean(meta.cached),
+      stale: Boolean(meta.stale),
+      generatedAt: meta.generatedAt || null,
+      attempts: Array.isArray(meta.attempts) ? meta.attempts : []
     };
   }
 
@@ -576,6 +600,15 @@
     syncCompareButton();
 
     if (state.requestStatus === 'loading') {
+      if (state.flights.length > 0) {
+        const visibleFlights = getVisibleFlights();
+        elements.results.innerHTML = renderResultsWithPanel(
+          buildLoadingState(),
+          visibleFlights.map(renderFlightRow).join('')
+        );
+        return;
+      }
+
       elements.results.innerHTML = Array.from({ length: 5 }, function () {
         return '<div class="skeleton skeleton--row" style="height:88px; border-radius:var(--radius-card);"></div>';
       }).join('');
@@ -583,11 +616,29 @@
     }
 
     if (state.requestStatus === 'unavailable') {
+      if (state.flights.length > 0) {
+        const visibleFlights = getVisibleFlights();
+        elements.results.innerHTML = renderResultsWithPanel(
+          buildUnavailableState(true),
+          visibleFlights.map(renderFlightRow).join('')
+        );
+        return;
+      }
+
       elements.results.innerHTML = buildUnavailableState();
       return;
     }
 
     if (state.requestStatus === 'error') {
+      if (state.flights.length > 0) {
+        const visibleFlights = getVisibleFlights();
+        elements.results.innerHTML = renderResultsWithPanel(
+          buildErrorState(true),
+          visibleFlights.map(renderFlightRow).join('')
+        );
+        return;
+      }
+
       elements.results.innerHTML = buildErrorState();
       return;
     }
@@ -647,17 +698,23 @@
     }
 
     if (state.requestStatus === 'loading') {
-      summary.textContent = t('Searching flights…', '正在搜尋航班…');
+      summary.textContent = state.flights.length > 0
+        ? t('Refreshing flights… showing previous results.', '正在更新航班…目前顯示上次結果。')
+        : t('Searching flights…', '正在搜尋航班…');
       return;
     }
 
     if (state.requestStatus === 'unavailable') {
-      summary.textContent = t('Live flight search unavailable', '即時航班搜尋目前不可用');
+      summary.textContent = state.flights.length > 0
+        ? t('Live search unavailable. Showing previous results.', '即時搜尋不可用，顯示上次結果。')
+        : t('Live flight search unavailable', '即時航班搜尋目前不可用');
       return;
     }
 
     if (state.requestStatus === 'error') {
-      summary.textContent = t('Search failed', '搜尋失敗');
+      summary.textContent = state.flights.length > 0
+        ? t('Search failed. Showing previous results.', '搜尋失敗，顯示上次結果。')
+        : t('Search failed', '搜尋失敗');
       return;
     }
 
@@ -672,6 +729,76 @@
     summary.textContent = totalCount === visibleCount
       ? t(`${totalCount} flights`, `${totalCount} 筆航班`)
       : t(`${visibleCount} / ${totalCount} flights`, `${visibleCount} / ${totalCount} 筆航班`);
+  }
+
+  function updateMeta() {
+    const metaEl = document.getElementById('fs-meta');
+    if (!metaEl) {
+      return;
+    }
+
+    const meta = state.requestMeta;
+    if (!meta || state.requestStatus !== 'success') {
+      metaEl.innerHTML = '';
+      return;
+    }
+
+    const badges = [];
+    badges.push(`<span class="badge badge--provider">${escapeHtml(renderProviderLabel(meta.provider))}</span>`);
+
+    if (meta.fallbackUsed) {
+      badges.push(`<span class="badge badge--provider-warn">${escapeHtml(t('Fallback', '備援'))}</span>`);
+    }
+
+    if (meta.cached) {
+      badges.push(`<span class="badge badge--provider">${escapeHtml(t('Cached', '快取'))}</span>`);
+    }
+
+    if (meta.stale) {
+      badges.push(`<span class="badge badge--provider-stale">${escapeHtml(t('Stale', '舊快照'))}</span>`);
+    }
+
+    const generatedText = meta.generatedAt
+      ? renderGeneratedAt(meta.generatedAt)
+      : t('Generated time unavailable', '無法取得產生時間');
+
+    metaEl.innerHTML = `
+      <div class="provider-meta__badges">${badges.join('')}</div>
+      <div class="provider-meta__text">${escapeHtml(generatedText)}</div>
+    `;
+  }
+
+  function renderProviderLabel(provider) {
+    const value = String(provider || '').toLowerCase();
+    if (value.includes('serpapi')) return 'SerpApi';
+    if (value.includes('fli')) return 'fli';
+    if (value.includes('deterministic_sample')) return t('Sample', '樣本');
+    if (value.includes('last_known_good')) return t('Last Known Good', '最近成功快照');
+    return provider || 'unknown';
+  }
+
+  function renderGeneratedAt(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return t('Updated just now', '剛剛更新');
+    }
+
+    const locale = isChinese() ? 'zh-TW' : undefined;
+    return t('Updated', '更新時間') + `: ${date.toLocaleString(locale, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })}`;
+  }
+
+  function buildLoadingState() {
+    return buildStateCard({
+      title: t('Refreshing results', '正在更新結果'),
+      body: t('A new request is in progress. Previous results stay visible until the refresh completes.', '新請求進行中。在更新完成前，保留上次結果。'),
+      tone: 'neutral'
+    });
   }
 
   function buildIdleState() {
@@ -699,41 +826,46 @@
     });
   }
 
-  function buildUnavailableState() {
+  function buildUnavailableState(hasPreviousResults = false) {
     const details = state.requestError?.message === 'missing_required_env'
       ? t('Live flight search is not configured yet.', '即時航班搜尋尚未設定完成。')
       : (state.requestError?.message || '');
 
     return buildStateCard({
       title: t('Live flight search is unavailable', '即時航班搜尋目前不可用'),
-      body: t(
+      body: hasPreviousResults
+        ? t(
+          'The live request failed, but the previous successful result set is still available below.',
+          '本次即時查詢失敗，但下方仍保留上次成功結果。'
+        )
+        : t(
         'The backend route is available, but provider credentials are missing. Retry after environment setup, or continue validating the UI flow now.',
         '後端路由存在，但供應商金鑰尚未設定。可在環境設定完成後重試，或先繼續驗證前端流程。'
-      ),
+        ),
       subbody: details,
       tone: 'warning',
       includeRetry: true
     });
   }
 
-  function buildErrorState() {
+  function buildErrorState(hasPreviousResults = false) {
     return buildStateCard({
       title: t('Flight search failed', '航班搜尋失敗'),
-      body: t('The request did not complete successfully. Please retry.', '請求未成功完成，請再試一次。'),
+      body: hasPreviousResults
+        ? t('The latest request failed. Previous successful results remain visible below.', '最新請求失敗，下方仍保留上次成功結果。')
+        : t('The request did not complete successfully. Please retry.', '請求未成功完成，請再試一次。'),
       subbody: state.requestError?.message || '',
       tone: 'error',
       includeRetry: true
     });
   }
 
+  function renderResultsWithPanel(panelMarkup, rowsMarkup) {
+    return `${panelMarkup}${rowsMarkup}`;
+  }
+
   function buildStateCard(options) {
     const tone = options.tone || 'neutral';
-    const borderColor = tone === 'error'
-      ? 'var(--color-danger)'
-      : tone === 'warning'
-        ? 'var(--color-warning)'
-        : 'rgba(0,0,0,0.12)';
-
     const badge = tone === 'warning'
       ? `<span class="badge badge--ai-warn">${escapeHtml(t('Unavailable', '不可用'))}</span>`
       : tone === 'error'
@@ -741,13 +873,13 @@
         : '';
 
     return `
-      <div style="border:1px solid ${borderColor}; border-radius:var(--radius-card); background:var(--color-surface); padding:var(--spacing-lg); display:grid; gap:var(--spacing-sm);">
-        <div style="display:flex; align-items:center; gap:var(--spacing-sm); flex-wrap:wrap;">
-          <h3 style="margin:0; color:var(--color-text-primary);">${escapeHtml(options.title)}</h3>
+      <div class="status-panel status-panel--${escapeHtml(tone)}">
+        <div class="status-panel__header">
+          <h3 class="status-panel__title">${escapeHtml(options.title)}</h3>
           ${badge}
         </div>
-        <p style="margin:0; color:var(--color-text-secondary);">${escapeHtml(options.body)}</p>
-        ${options.subbody ? `<p style="margin:0; font-size:0.875rem; color:var(--color-text-secondary);">${escapeHtml(options.subbody)}</p>` : ''}
+        <p class="status-panel__body">${escapeHtml(options.body)}</p>
+        ${options.subbody ? `<p class="status-panel__subbody">${escapeHtml(options.subbody)}</p>` : ''}
         ${options.includeRetry ? `<div><button type="button" class="btn btn--primary" data-fs-retry>${escapeHtml(t('Retry', '重新嘗試'))}</button></div>` : ''}
       </div>
     `;

@@ -70,10 +70,14 @@
     return tracking.find((item) => item && (item.id === destination || item.destination === destination)) || null;
   }
 
-  function getDateRangeQuery(destination) {
+  function getTrackingQuery(destination) {
     const track = getTrackingRecord(destination);
-    if (!track || !track.dateRange) return '';
-    return `&dateRange=${encodeURIComponent(JSON.stringify(track.dateRange))}`;
+    if (!track) return '';
+    const params = new URLSearchParams();
+    if (track.origin) params.set('origin', track.origin);
+    if (track.dateRange) params.set('dateRange', JSON.stringify(track.dateRange));
+    const query = params.toString();
+    return query ? `&${query}` : '';
   }
 
   function showToast(message, type) {
@@ -282,12 +286,15 @@
 
     const container = canvas.parentElement || canvas;
     container.classList.add('chart-container', 'chart-container--dual-axis');
+    container.style.height = '380px';
+    container.style.minHeight = '380px';
+    canvas.style.height = '100%';
     if (!trendChartInstance) {
       container.classList.add('skeleton', 'skeleton--chart');
     }
 
     try {
-      const response = await fetch(`/api/flight-trend?destination=${encodeURIComponent(destination)}${getDateRangeQuery(destination)}`);
+      const response = await fetch(`/api/flight-trend?destination=${encodeURIComponent(destination)}${getTrackingQuery(destination)}`);
       if (!response.ok) throw new Error(`Trend API ${response.status}`);
 
       const payload = await response.json();
@@ -351,7 +358,7 @@
         })
       });
 
-      showToast(t('Trend chart fallback mode.', '趨勢圖已切到 fallback 顯示。'), 'warning');
+      showToast(t('Trend chart entered fallback mode because the frontend render path failed or the trend request did not complete.', '趨勢圖進入 fallback mode，原因是前端 render 流程失敗或 trend 請求未完成。'), 'warning');
       console.error(error);
     }
   }

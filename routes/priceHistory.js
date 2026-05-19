@@ -1,14 +1,6 @@
 const express = require('express');
 const router = express.Router();
-
-function hashString(input) {
-  let hash = 2166136261;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
+const flightSnapshot = require('../services/flights/snapshot');
 
 function normalizeDateRange(dateRangeRaw, fallbackStart, fallbackEnd) {
   if (!dateRangeRaw) {
@@ -25,12 +17,6 @@ function normalizeDateRange(dateRangeRaw, fallbackStart, fallbackEnd) {
   }
 }
 
-function addDays(dateString, days) {
-  const date = new Date(`${dateString}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().split('T')[0];
-}
-
 function getDaysBetween(start, end) {
   const startDate = new Date(`${start}T00:00:00Z`);
   const endDate = new Date(`${end}T00:00:00Z`);
@@ -43,14 +29,14 @@ function seasonalOffset(month) {
   return offsets[month - 1] || 0;
 }
 
-function buildMonthlySeries(origin, destination) {
-  const seed = hashString(`${origin}:${destination}:price-history`);
-  const basePrice = 9000 + (seed % 2600);
+function buildMonthlySeries(origin, destination, snapshot) {
+  const seed = snapshot?.signature || flightSnapshot.hashString(`${origin}:${destination}:price-history`);
+  const basePrice = Math.round(snapshot?.avgPrice || (9000 + (seed % 2600)));
   const currentYear = [];
   const priorYear = [];
 
   for (let month = 1; month <= 12; month += 1) {
-    const variationSeed = hashString(`${origin}:${destination}:month:${month}`);
+    const variationSeed = flightSnapshot.hashString(`${origin}:${destination}:${seed}:month:${month}`);
     const currentAdjustment = (variationSeed % 700) - 350;
     const priorAdjustment = ((variationSeed >>> 3) % 650) - 325;
     const currentPrice = Math.max(6500, basePrice + seasonalOffset(month) + currentAdjustment);
@@ -63,16 +49,17 @@ function buildMonthlySeries(origin, destination) {
   return { currentYear, priorYear };
 }
 
-function buildTrendSeries(origin, destination, range) {
+function buildTrendSeries(origin, destination, range, snapshot) {
   const daySpan = Math.min(getDaysBetween(range.start, range.end), 365);
-  const flightBase = 9800 + (hashString(`${origin}:${destination}:flight-base`) % 2400);
-  const hotelBase = 2600 + (hashString(`${origin}:${destination}:hotel-base`) % 1400);
+  const signature = snapshot?.signature || flightSnapshot.hashString(`${origin}:${destination}:${range.start}:trend`);
+  const flightBase = Math.round(snapshot?.avgPrice || (9800 + (signature % 2400)));
+  const hotelBase = 2600 + (flightSnapshot.hashString(`${origin}:${destination}:hotel-base`) % 1400);
   const trend = [];
 
   for (let index = 0; index <= daySpan; index += 1) {
-    const date = addDays(range.start, index);
-    const flightSeed = hashString(`${origin}:${destination}:${date}:flight`);
-    const hotelSeed = hashString(`${origin}:${destination}:${date}:hotel`);
+    const date = flightSnapshot.addDays(range.start, index);
+    const flightSeed = flightSnapshot.hashString(`${origin}:${destination}:${signature}:${date}:flight`);
+    const hotelSeed = flightSnapshot.hashString(`${origin}:${destination}:${date}:hotel`);
 
     trend.push({
       date,
@@ -86,8 +73,19 @@ function buildTrendSeries(origin, destination, range) {
 
 router.get('/price-history', async (req, res) => {
   try {
-    const { origin = 'TPE', destination = 'NRT' } = req.query;
-    const { currentYear, priorYear } = buildMonthlySeries(origin, destination);
+    const { origin = 'TPE', destination = 'NRT', year = '2025', dateRange } = req.query;
+    const anchorDate = dateRange
+      ? normalizeDateRange(dateRange, `${year}-08-01`, `${year}-08-07`).start
+      : `${year}-08-15`;
+    const snapshot = await flightSnapshot.getFlightSnapshot({
+      origin,
+      destination,
+      departureDate: anchorDate,
+      cabin: 'economy',
+      maxStops: '1',
+      currency: 'TWD'
+    });
+    const { currentYear, priorYear } = buildMonthlySeries(origin, destination, snapshot);
 
     res.json({
       origin,
@@ -95,7 +93,15 @@ router.get('/price-history', async (req, res) => {
       currentYear,
       priorYear,
       data_confidence: 'medium',
-      sources: ['deterministic-sample://price-history-v1']
+      sources: [snapshot.meta?.provider || 'deterministic-sample://price-history-v1'],
+      meta: {
+        generatedAt: snapshot.meta?.generatedAt || new Date().toISOString(),
+        provider: snapshot.meta?.provider || 'deterministic_sample',
+        cached: Boolean(snapshot.meta?.cached),
+        stale: Boolean(snapshot.meta?.stale),
+        fallbackUsed: Boolean(snapshot.meta?.fallbackUsed),
+        anchorDate
+      }
     });
   } catch (error) {
     console.error('Error in /api/price-history', error);
@@ -107,9 +113,27 @@ router.get('/flight-trend', async (req, res) => {
   try {
     const { origin = 'TPE', destination = 'NRT', dateRange } = req.query;
     const range = normalizeDateRange(dateRange, '2025-08-01', '2025-08-07');
-    const trend = buildTrendSeries(origin, destination, range);
+    const snapshot = await flightSnapshot.getFlightSnapshot({
+      origin,
+      destination,
+      departureDate: range.start,
+      cabin: 'economy',
+      maxStops: '1',
+      currency: 'TWD'
+    });
+    const trend = buildTrendSeries(origin, destination, range, snapshot);
 
-    res.json({ trend });
+    res.json({
+      trend,
+      meta: {
+        generatedAt: snapshot.meta?.generatedAt || new Date().toISOString(),
+        provider: snapshot.meta?.provider || 'deterministic_sample',
+        cached: Boolean(snapshot.meta?.cached),
+        stale: Boolean(snapshot.meta?.stale),
+        fallbackUsed: Boolean(snapshot.meta?.fallbackUsed),
+        anchorDate: range.start
+      }
+    });
   } catch (error) {
     console.error('Error in /api/flight-trend', error);
     res.status(500).json({ error: 'Failed to fetch flight trend' });
