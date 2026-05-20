@@ -81,15 +81,33 @@
     }
 
     const providers = quotaSnapshot.providers;
-    const lines = [];
+    const badges = [];
     if (providers.gemini) {
-      lines.push(formatQuotaLine('Gemini', providers.gemini.usage.dayUsed, providers.gemini.remaining.requestsPerDay, 'today'));
+      const g = providers.gemini;
+      badges.push(`
+        <span class="quota-badge">
+          <span class="quota-badge__name">Gemini</span>
+          <span class="quota-badge__val">${g.usage.dayUsed} today · left ${g.remaining.requestsPerDay !== null ? g.remaining.requestsPerDay : 'unlimited'}</span>
+        </span>
+      `);
     }
     if (providers.serpapi) {
-      lines.push(formatQuotaLine('SerpApi', providers.serpapi.usage.monthUsed, providers.serpapi.remaining.searchesPerMonth, 'this month'));
+      const s = providers.serpapi;
+      badges.push(`
+        <span class="quota-badge">
+          <span class="quota-badge__name">SerpApi</span>
+          <span class="quota-badge__val">${s.usage.monthUsed} this month · left ${s.remaining.searchesPerMonth !== null ? s.remaining.searchesPerMonth : 'unlimited'}</span>
+        </span>
+      `);
     }
     if (providers.openweathermap) {
-      lines.push(formatQuotaLine('OpenWeather', providers.openweathermap.usage.dayUsed, providers.openweathermap.remaining.callsPerDay, 'today'));
+      const w = providers.openweathermap;
+      badges.push(`
+        <span class="quota-badge">
+          <span class="quota-badge__name">OpenWeather</span>
+          <span class="quota-badge__val">${w.usage.dayUsed} today · left ${w.remaining.callsPerDay !== null ? w.remaining.callsPerDay : 'unlimited'}</span>
+        </span>
+      `);
     }
 
     const title = [
@@ -100,8 +118,11 @@
 
     container.innerHTML = `
       <div class="quota-bar" title="${title}">
-        <span class="quota-bar__label">Quota</span>
-        <span class="quota-bar__text">${lines.join(' | ')}</span>
+        <span class="quota-bar__label">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16" height="16" style="vertical-align: middle; margin-right: 6px; color: var(--color-accent);"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>
+          API Quota
+        </span>
+        <div class="quota-badges-wrapper">${badges.join('')}</div>
       </div>
     `;
   }
@@ -301,6 +322,7 @@
 
   const langDict = {
     en: {
+      'app-title': 'Travel Search Assistant',
       'nav-dashboard': 'Dashboard',
       'nav-flights': 'Flights',
       'nav-price-history': 'Price History',
@@ -327,6 +349,7 @@
       'i18n-business': 'Business'
     },
     zh: {
+      'app-title': '旅遊搜尋助手',
       'nav-dashboard': '儀表板',
       'nav-flights': '航班搜尋',
       'nav-price-history': '歷史價格',
@@ -359,7 +382,7 @@
   function applyLang() {
     const dict = langDict[currentLang] || langDict.en;
 
-    ['nav-dashboard', 'nav-flights', 'nav-price-history', 'lang-toggle'].forEach((id) => {
+    ['app-title', 'nav-dashboard', 'nav-flights', 'nav-price-history', 'lang-toggle'].forEach((id) => {
       const el = document.getElementById(id);
       if (el && dict[id]) {
         el.textContent = dict[id];
@@ -380,18 +403,38 @@
   function applyShellText(dict) {
     const placeholders = currentLang === 'zh'
       ? {
-          'dash-origin': '出發地 (例：TPE)',
-          'dash-dest': '目的地 (例：NRT)'
+          'dash-origin': '例：TPE',
+          'dash-dest': '例：NRT'
         }
       : {
-          'dash-origin': 'Origin (e.g. TPE)',
-          'dash-dest': 'Destination (e.g. NRT)'
+          'dash-origin': 'e.g. TPE',
+          'dash-dest': 'e.g. NRT'
         };
 
     Object.entries(placeholders).forEach(([id, text]) => {
       const el = document.getElementById(id);
       if (el) el.setAttribute('placeholder', text);
     });
+
+    const labelTranslations = currentLang === 'zh'
+      ? {
+          'label-origin': '出發地',
+          'label-dest': '抵達地',
+          'label-start': '去程日期',
+          'label-end': '回程日期'
+        }
+      : {
+          'label-origin': 'Origin',
+          'label-dest': 'Destination',
+          'label-start': 'Departure',
+          'label-end': 'Return'
+        };
+
+    Object.entries(labelTranslations).forEach(([id, text]) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = text;
+    });
+
 
     const themeBtn = document.getElementById('theme-toggle');
     if (themeBtn) {

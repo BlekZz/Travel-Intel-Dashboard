@@ -131,10 +131,10 @@
           </form>
 
           <div style="display:flex; flex-wrap:wrap; gap:var(--spacing-sm); align-items:center; justify-content:space-between;">
-            <div style="display:flex; flex-wrap:wrap; gap:var(--spacing-sm);">
-              <button type="button" class="badge" id="flt-direct" data-filter-chip="direct" aria-pressed="false">${escapeHtml(t('Direct', '直飛'))}</button>
-              <button type="button" class="badge" id="flt-budget" data-filter-chip="budget" aria-pressed="false">${escapeHtml(t('Budget', '廉航'))}</button>
-              <button type="button" class="badge" id="flt-baggage" data-filter-chip="baggage" aria-pressed="false">${escapeHtml(t('With Baggage', '含行李'))}</button>
+            <div style="display:flex; flex-wrap:wrap; gap:var(--spacing-md);">
+              <button type="button" class="filter-chip badge" id="flt-direct" data-filter-chip="direct" aria-pressed="false">${escapeHtml(t('Direct', '直飛'))}</button>
+              <button type="button" class="filter-chip badge" id="flt-budget" data-filter-chip="budget" aria-pressed="false">${escapeHtml(t('Budget', '廉航'))}</button>
+              <button type="button" class="filter-chip badge" id="flt-baggage" data-filter-chip="baggage" aria-pressed="false">${escapeHtml(t('With Baggage', '含行李'))}</button>
             </div>
             <div style="display:grid; gap:4px; justify-items:end;">
               <div id="fs-summary" style="font-size:0.875rem; color:var(--color-text-secondary);"></div>

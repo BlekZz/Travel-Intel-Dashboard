@@ -7,6 +7,7 @@
   let activeDestination = DEFAULT_DESTINATION;
   let heatmapType = 'outbound';
   let lastHeatmapPayload = null;
+  let currentCenterMonth = null;
 
   function getApp() {
     return (window.TravelIntel && window.TravelIntel.app) || {};
@@ -205,7 +206,20 @@
     };
   }
 
-  function getTrendOptions(avgFlight, avgHotel, colors) {
+  function calculateScaleBounds(values, percentage = 0.2) {
+    const valid = values.filter((v) => Number.isFinite(v));
+    if (!valid.length) return { min: undefined, max: undefined };
+    const minVal = Math.min(...valid);
+    const maxVal = Math.max(...valid);
+    const range = maxVal - minVal;
+    const padding = range * percentage || minVal * 0.1 || 1000;
+    const minScale = Math.max(0, Math.floor((minVal - padding) / 100) * 100);
+    const yMaxBase = maxVal + padding;
+    const maxScale = Math.ceil(yMaxBase / 100) * 100;
+    return { min: minScale, max: maxScale };
+  }
+
+  function getTrendOptions(avgFlight, avgHotel, colors, flightBounds, hotelBounds) {
     return {
       animation: getChartAnimationConfig(),
       responsive: true,
@@ -216,7 +230,10 @@
       },
       plugins: {
         legend: {
+          position: 'bottom',
           labels: {
+            boxWidth: 35,
+            boxHeight: 2,
             color: colors.text
           }
         },
@@ -245,6 +262,8 @@
           type: 'linear',
           display: true,
           position: 'left',
+          min: flightBounds ? flightBounds.min : undefined,
+          max: flightBounds ? flightBounds.max : undefined,
           title: {
             display: true,
             text: t('Flight (NT$)', '機票 (NT$)'),
@@ -261,6 +280,8 @@
           type: 'linear',
           display: true,
           position: 'right',
+          min: hotelBounds ? hotelBounds.min : undefined,
+          max: hotelBounds ? hotelBounds.max : undefined,
           title: {
             display: true,
             text: t('Hotel (NT$)', '飯店 (NT$)'),
@@ -304,6 +325,9 @@
       const flightPrices = trend.map((item) => normalizeNumber(item.avgFlightPrice));
       const hotelPrices = trend.map((item) => normalizeNumber(item.avgHotelPrice));
 
+      const flightBounds = calculateScaleBounds(flightPrices, 0.2);
+      const hotelBounds = calculateScaleBounds(hotelPrices, 0.2);
+
       const colors = {
         flight: getCssColor('--color-primary-mid', '#2E6DB4'),
         hotel: getCssColor('--color-accent', '#1D9E75'),
@@ -322,7 +346,7 @@
           labels: labels.length ? labels : [t('No data', '無資料')],
           datasets
         },
-        options: getTrendOptions(avgFlight, avgHotel, colors)
+        options: getTrendOptions(avgFlight, avgHotel, colors, flightBounds, hotelBounds)
       });
 
       container.classList.remove('skeleton', 'skeleton--chart');
@@ -355,7 +379,7 @@
           flight: getCssColor('--color-primary-mid', '#2E6DB4'),
           hotel: getCssColor('--color-accent', '#1D9E75'),
           text: getCssColor('--color-text-secondary', '#6B7280')
-        })
+        }, null, null)
       });
 
       showToast(t('Trend chart entered fallback mode because the frontend render path failed or the trend request did not complete.', '趨勢圖進入 fallback mode，原因是前端 render 流程失敗或 trend 請求未完成。'), 'warning');
@@ -363,7 +387,7 @@
     }
   }
 
-  function buildHeatmapHeader(container) {
+  function buildHeatmapHeader(container, allMonths = [], centerIndex = -1, destination = '') {
     const header = document.createElement('div');
     header.style.display = 'flex';
     header.style.justifyContent = 'space-between';
@@ -380,7 +404,34 @@
     const controls = document.createElement('div');
     controls.style.display = 'flex';
     controls.style.gap = '8px';
+    controls.style.alignItems = 'center';
 
+    // Left navigation arrow button (disabled if at the start of allMonths list)
+    const prevBtn = document.createElement('button');
+    prevBtn.type = 'button';
+    prevBtn.innerHTML = '&larr;';
+    prevBtn.style.padding = '6px 12px';
+    prevBtn.style.borderRadius = '8px';
+    prevBtn.style.border = `1px solid ${getCssColor('--color-text-secondary', 'rgba(0,0,0,0.12)')}`;
+    prevBtn.style.cursor = 'pointer';
+    prevBtn.style.background = getCssColor('--color-surface', '#ffffff');
+    prevBtn.style.color = getCssColor('--color-text-primary', '#111827');
+    prevBtn.style.fontWeight = 'bold';
+    prevBtn.title = t('Previous Month', '上一個月');
+
+    if (centerIndex <= 0) {
+      prevBtn.disabled = true;
+      prevBtn.style.opacity = '0.4';
+      prevBtn.style.cursor = 'not-allowed';
+    } else {
+      prevBtn.onclick = function() {
+        currentCenterMonth = allMonths[centerIndex - 1];
+        renderHeatmap(destination);
+      };
+    }
+    controls.appendChild(prevBtn);
+
+    // Outbound / Return Mode Buttons
     ['outbound', 'return'].forEach((type) => {
       const button = document.createElement('button');
       button.type = 'button';
@@ -395,10 +446,36 @@
       button.style.color = heatmapType === type ? '#ffffff' : getCssColor('--color-text-primary', '#111827');
       button.onclick = function() {
         heatmapType = type;
-        renderHeatmap(activeDestination);
+        currentCenterMonth = null; // Re-eval center month based on start/end date
+        renderHeatmap(destination);
       };
       controls.appendChild(button);
     });
+
+    // Right navigation arrow button (disabled if at the end of allMonths list)
+    const nextBtn = document.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.innerHTML = '&rarr;';
+    nextBtn.style.padding = '6px 12px';
+    nextBtn.style.borderRadius = '8px';
+    nextBtn.style.border = `1px solid ${getCssColor('--color-text-secondary', 'rgba(0,0,0,0.12)')}`;
+    nextBtn.style.cursor = 'pointer';
+    nextBtn.style.background = getCssColor('--color-surface', '#ffffff');
+    nextBtn.style.color = getCssColor('--color-text-primary', '#111827');
+    nextBtn.style.fontWeight = 'bold';
+    nextBtn.title = t('Next Month', '下一個月');
+
+    if (centerIndex < 0 || centerIndex >= allMonths.length - 1) {
+      nextBtn.disabled = true;
+      nextBtn.style.opacity = '0.4';
+      nextBtn.style.cursor = 'not-allowed';
+    } else {
+      nextBtn.onclick = function() {
+        currentCenterMonth = allMonths[centerIndex + 1];
+        renderHeatmap(destination);
+      };
+    }
+    controls.appendChild(nextBtn);
 
     header.appendChild(title);
     header.appendChild(controls);
@@ -447,20 +524,9 @@
   }
 
   function filterHeatmapDays(days, destination) {
-    const track = getTrackingRecord(destination);
-    if (!track || !track.dateRange || !track.dateRange.start || !track.dateRange.end) {
-      return days;
-    }
-
-    const start = new Date(track.dateRange.start);
-    const end = new Date(track.dateRange.end);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-
-    return days.filter((day) => {
-      const current = new Date(day.date);
-      return current >= start && current <= end;
-    });
+    // Return all days to display the full calendar heatmap.
+    // The specific tracked dates will be highlighted with a distinctive border/dot.
+    return days;
   }
 
   function groupDaysByMonth(days) {
@@ -497,9 +563,12 @@
     container.appendChild(empty);
   }
 
-  function createMonthGrid(monthData, wrapper) {
+  function createMonthGrid(monthData, wrapper, destination) {
     const monthContainer = document.createElement('section');
     monthContainer.style.minWidth = '240px';
+    monthContainer.style.maxWidth = '360px';
+    monthContainer.style.flex = '1 1 240px';
+
 
     const title = document.createElement('h4');
     title.textContent = monthData.name;
@@ -535,6 +604,16 @@
       }
     }
 
+    const track = getTrackingRecord(destination);
+    let start = null;
+    let end = null;
+    if (track && track.dateRange && track.dateRange.start && track.dateRange.end) {
+      start = new Date(track.dateRange.start);
+      end = new Date(track.dateRange.end);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+    }
+
     monthData.days.forEach((day) => {
       const cell = document.createElement('button');
       cell.type = 'button';
@@ -555,10 +634,40 @@
       const dayNumber = Number.isNaN(dateValue.getTime()) ? '--' : dateValue.getDate();
       const flightPrice = normalizeNumber(day.flightPrice);
 
+      let isHighlighted = false;
+      if (start && end && !Number.isNaN(dateValue.getTime())) {
+        const cellMonthDay = dateValue.getMonth() * 100 + dateValue.getDate();
+        const startMonthDay = start.getMonth() * 100 + start.getDate();
+        const endMonthDay = end.getMonth() * 100 + end.getDate();
+        
+        if (startMonthDay <= endMonthDay) {
+          isHighlighted = (cellMonthDay >= startMonthDay && cellMonthDay <= endMonthDay);
+        } else {
+          isHighlighted = (cellMonthDay >= startMonthDay || cellMonthDay <= endMonthDay);
+        }
+      }
+
+      if (isHighlighted) {
+        cell.style.boxShadow = '0 0 0 2px var(--color-primary), 0 4px 6px -1px rgba(0,0,0,0.1)';
+        cell.style.border = '2px solid var(--color-primary)';
+      }
+
       cell.innerHTML = `
         <span style="position:absolute;top:4px;left:6px;font-size:0.72rem;font-weight:700;opacity:0.85;">${dayNumber}</span>
         <span style="font-size:0.92rem;font-weight:700;margin-top:8px;">${formatCompactCurrency(flightPrice)}</span>
       `;
+
+      if (isHighlighted) {
+        const activeDot = document.createElement('span');
+        activeDot.style.position = 'absolute';
+        activeDot.style.bottom = '4px';
+        activeDot.style.right = '6px';
+        activeDot.style.width = '6px';
+        activeDot.style.height = '6px';
+        activeDot.style.borderRadius = '50%';
+        activeDot.style.background = 'var(--color-primary)';
+        cell.appendChild(activeDot);
+      }
 
       cell.onmouseenter = function() {
         if (!prefersReducedMotion()) cell.style.transform = 'scale(1.04)';
@@ -593,10 +702,17 @@
     if (!container) return;
 
     container.classList.add('chart-container', 'chart-container--heatmap');
+
+    // Lock the current height to prevent page height jumping
+    const currentHeight = container.offsetHeight;
+    if (currentHeight > 0) {
+      container.style.minHeight = `${currentHeight}px`;
+    }
+
     container.innerHTML = '<div class="skeleton skeleton--chart"></div>';
 
     try {
-      const response = await fetch(`/api/heatmap?destination=${encodeURIComponent(destination)}&type=${encodeURIComponent(heatmapType)}`);
+      const response = await fetch(`/api/heatmap?destination=${encodeURIComponent(destination)}&type=${encodeURIComponent(heatmapType)}${getTrackingQuery(destination)}`);
       if (!response.ok) throw new Error(`Heatmap API ${response.status}`);
 
       const payload = await response.json();
@@ -606,8 +722,45 @@
       const filteredDays = filterHeatmapDays(originalDays, destination);
       const groups = groupDaysByMonth(filteredDays);
 
+      const allMonths = Array.from(groups.keys()).sort();
+
+      // Sync activeDestination and reset center month if destination changed
+      if (activeDestination !== destination) {
+        currentCenterMonth = null;
+      }
+      activeDestination = destination;
+
+      // Determine center month based on the selected date:
+      // Outbound uses start date, Return uses end date
+      const track = getTrackingRecord(destination);
+      let selectedDate = null;
+      if (track && track.dateRange) {
+        selectedDate = heatmapType === 'outbound' ? track.dateRange.start : track.dateRange.end;
+      }
+
+      if (!currentCenterMonth && selectedDate) {
+        const dateObj = new Date(selectedDate);
+        if (!Number.isNaN(dateObj.getTime())) {
+          currentCenterMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+        }
+      }
+
+      // Fallback if currentCenterMonth is invalid or not in the dataset
+      if (!currentCenterMonth || !allMonths.includes(currentCenterMonth)) {
+        currentCenterMonth = allMonths[Math.floor(allMonths.length / 2)] || allMonths[0] || null;
+      }
+
+      let centerIndex = -1;
+      let visibleMonths = allMonths;
+      if (currentCenterMonth) {
+        centerIndex = allMonths.indexOf(currentCenterMonth);
+        const startIndex = Math.max(0, centerIndex - 1);
+        const endIndex = Math.min(allMonths.length - 1, centerIndex + 1);
+        visibleMonths = allMonths.slice(startIndex, endIndex + 1);
+      }
+
       container.innerHTML = '';
-      buildHeatmapHeader(container);
+      buildHeatmapHeader(container, allMonths, centerIndex, destination);
       buildHeatmapLegend(container);
 
       const wrapper = document.createElement('div');
@@ -615,14 +768,21 @@
       wrapper.style.gap = '16px';
       wrapper.style.overflowX = 'auto';
       wrapper.style.paddingBottom = '12px';
+      wrapper.style.width = '100%';
+      wrapper.style.justifyContent = 'center';
+      wrapper.style.flexWrap = 'wrap';
+
 
       if (!filteredDays.length) {
         buildEmptyHeatmapState(container, t('No heatmap data for this range.', '此區間沒有熱力圖資料。'));
         return;
       }
 
-      groups.forEach((monthData) => {
-        wrapper.appendChild(createMonthGrid(monthData, wrapper));
+      visibleMonths.forEach((monthKey) => {
+        const monthData = groups.get(monthKey);
+        if (monthData) {
+          wrapper.appendChild(createMonthGrid(monthData, wrapper, destination));
+        }
       });
 
       container.appendChild(wrapper);
@@ -634,6 +794,9 @@
       buildEmptyHeatmapState(container, t('Heatmap unavailable. Rendering fallback state.', '熱力圖目前不可用，已顯示 fallback 狀態。'));
       console.error(error);
       showToast(t('Heatmap fallback mode.', '熱力圖已切到 fallback 顯示。'), 'warning');
+    } finally {
+      // Restore default min-height style
+      container.style.minHeight = '';
     }
   }
 

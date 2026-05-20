@@ -424,24 +424,7 @@ async function computeFunScore(dimensions, context = {}) {
   const prompt = [
     '請根據以下旅遊背景與偏好權重，輸出好玩指數分析 JSON。',
     '若資訊不足，欄位請回傳 null，不可補造資料。',
-    'JSON schema:',
-    JSON.stringify({
-      score: 84,
-      dimension_scores: {
-        shopping: 78,
-        relaxation: 90,
-        luxury: 65,
-        food: 88,
-        sightseeing: 82,
-        value: 70,
-        festival: 75
-      },
-      strength: ['美食', '放鬆'],
-      weakness: ['奢侈享受'],
-      note: 'AI 分析說明文字',
-      data_confidence: 'medium',
-      sources: ['https://example.com']
-    }),
+    'JSON schema: { score:0-100, dimension_scores:{shopping,relaxation,luxury,food,sightseeing,value,festival}(各0-100), strength:string[], weakness:string[], note:string, data_confidence:"high"|"medium"|"low", sources:string[] }',
     `context=${JSON.stringify(context)}`,
     `dimensions=${JSON.stringify(normalizedDimensions)}`
   ].join('\n');
@@ -471,21 +454,7 @@ async function getBookingAdvice(priceHistory, trendData, options = {}) {
   const prompt = [
     '請根據歷史票價與近期趨勢，輸出購票建議 JSON。',
     '若資訊不足，欄位請回傳 null，不可補造資料。',
-    'JSON schema:',
-    JSON.stringify({
-      currentPriceLevel: 'high',
-      currentPriceDeviationPct: 18.5,
-      bestBookingWeeksBefore: '6-8',
-      targetPriceTwd: 9800,
-      confidence: 'medium',
-      riskNotes: ['農曆年旺季漲幅明顯'],
-      riskNotes_i18n: {
-        zh: ['農曆年旺季漲幅明顯'],
-        en: ['Peak holiday demand is pushing fares higher.']
-      },
-      data_confidence: 'medium',
-      sources: ['https://example.com']
-    }),
+    'JSON schema: { currentPriceLevel:"high"|"medium"|"low", currentPriceDeviationPct:number|null, bestBookingWeeksBefore:string|null, targetPriceTwd:number|null, confidence:"high"|"medium"|"low", riskNotes:string[], riskNotes_i18n:{zh:string[],en:string[]}, data_confidence:"high"|"medium"|"low", sources:string[] }',
     `priceHistory=${JSON.stringify(priceHistory)}`,
     `trendData=${JSON.stringify(trendData)}`
   ].join('\n');
@@ -541,42 +510,12 @@ function normalizeTravelInsightsResponse(payload, options = {}) {
 async function getTravelInsights(options = {}) {
   const normalizedDimensions = normalizeFunScoreDimensions(options.dimensions || {});
   const prompt = [
-    '請根據以下旅遊背景、票價趨勢與偏好權重，輸出單一 JSON。',
-    '若資訊不足，欄位請回傳 null，不可補造資料。',
-    '你必須同時回傳 funScore 與 bookingAdvice 兩個子物件。',
-    '若某個子物件資訊不足，仍要回傳完整欄位結構，不能省略 key，不能回傳半套物件。',
-    '只有在有足夠依據時才能回傳 medium/high；若無來源或依據不足，confidence 與 data_confidence 必須是 low。',
-    '若無有效 sources，請回傳空陣列，不要填入假連結。',
+    '請根據以下旅遊背景、票價趨勢與偏好權重，輸出單一 JSON（包含 funScore 與 bookingAdvice 兩個子物件，兩者不可省略任何 key）。',
+    '若資訊不足，欄位請回傳 null，不可補造資料；若無有效 sources，請回傳空陣列。',
+    '只有在有足夠依據時才能回傳 medium/high confidence；否則必須是 low。',
     'JSON schema:',
-    JSON.stringify({
-      funScore: {
-        score: 84,
-        dimension_scores: {
-          shopping: 78,
-          relaxation: 90,
-          luxury: 65,
-          food: 88,
-          sightseeing: 82,
-          value: 70,
-          festival: 75
-        },
-        strength: ['美食', '放鬆'],
-        weakness: ['奢侈享受'],
-        note: 'AI 分析說明文字',
-        data_confidence: 'medium',
-        sources: ['https://example.com']
-      },
-      bookingAdvice: {
-        currentPriceLevel: 'high',
-        currentPriceDeviationPct: 18.5,
-        bestBookingWeeksBefore: '6-8',
-        targetPriceTwd: 9800,
-        confidence: 'medium',
-        riskNotes: ['農曆年旺季漲幅明顯'],
-        data_confidence: 'medium',
-        sources: ['https://example.com']
-      }
-    }),
+    '  funScore: { score:0-100|null, dimension_scores:{shopping,relaxation,luxury,food,sightseeing,value,festival}(各0-100|null), strength:string[], weakness:string[], note:string|null, data_confidence:"high"|"medium"|"low", sources:string[] }',
+    '  bookingAdvice: { currentPriceLevel:"high"|"medium"|"low"|null, currentPriceDeviationPct:number|null, bestBookingWeeksBefore:string|null, targetPriceTwd:number|null, confidence:"high"|"medium"|"low", riskNotes:string[], data_confidence:"high"|"medium"|"low", sources:string[] }',
     `context=${JSON.stringify(options.context || {})}`,
     `dimensions=${JSON.stringify(normalizedDimensions)}`,
     `priceHistory=${JSON.stringify(options.priceHistory || null)}`,
@@ -619,39 +558,16 @@ async function getTravelIntelAnalysis(options = {}) {
     end: options?.dateRange?.end || null
   };
   const prompt = [
-    '請根據旅遊地點與日期區間，搜尋並評估 7 個旅遊面向的適合程度。',
-    '每個面向只能回傳 high、medium、low 三種等級之一；若資訊不足可回傳 null。',
-    '每個面向都要提供一段簡短評語，聚焦該時段與該地點的具體原因。',
-    '所有 AI 文字欄位都必須同時提供中英文兩版，以利前端切換語言，不可只回單語。',
-    '你評估的是季節/時段適配，不是使用者偏好權重。',
-    '若沒有足夠來源，不可給 high confidence；data_confidence 必須降為 low。',
+    '請根據旅遊地點與日期區間，搜尋並評估以下 7 個面向的季節/時段適合程度（不評估偏好權重）。',
+    '每個面向回傳 high|medium|low|null。所有文字欄位必須同時提供 zh 與 en 兩版。',
+    '若無足夠來源，data_confidence 必須為 low；sources 為空陣列。',
     'JSON schema:',
-    JSON.stringify({
-      destination: 'NRT',
-      dateRange: { start: '2026-08-15', end: '2026-08-21' },
-      aspects: {
-        shopping: { level: 'high', note: '夏季折扣與百貨活動較密集。', note_i18n: { zh: '夏季折扣與百貨活動較密集。', en: 'Late-summer shopping promotions and department-store events are still active.' } },
-        relaxation: { level: 'medium', note: '城市節奏偏快，但近郊仍可安排放鬆行程。', note_i18n: { zh: '城市節奏偏快，但近郊仍可安排放鬆行程。', en: 'The city stays busy, but nearby quieter areas can still support a more relaxed plan.' } },
-        luxury: { level: 'medium', note: '高端飯店與餐飲選項穩定，但旺季價格偏高。', note_i18n: { zh: '高端飯店與餐飲選項穩定，但旺季價格偏高。', en: 'Premium hotels and dining are available, but peak-season pricing remains elevated.' } },
-        food: { level: 'high', note: '此時令海鮮與夏季限定餐飲選擇豐富。', note_i18n: { zh: '此時令海鮮與夏季限定餐飲選擇豐富。', en: 'Seasonal seafood and summer-limited menus are strong during this window.' } },
-        sightseeing: { level: 'high', note: '天氣適合外出，主要景點可完整安排。', note_i18n: { zh: '天氣適合外出，主要景點可完整安排。', en: 'Most major attractions remain accessible, though weather comfort may vary by day.' } },
-        value: { level: 'low', note: '旺季交通與住宿價格普遍較高。', note_i18n: { zh: '旺季交通與住宿價格普遍較高。', en: 'Flights and lodging are typically more expensive in this peak window.' } },
-        festival: { level: 'high', note: '日期區間常有夏祭或煙火活動。', note_i18n: { zh: '日期區間常有夏祭或煙火活動。', en: 'Summer festivals and fireworks events are commonly available during this period.' } }
-      },
-      summary: '一句總結這段時間去該地點的整體輪廓。',
-      summary_i18n: {
-        zh: '一句總結這段時間去該地點的整體輪廓。',
-        en: 'A one-line summary of what this destination feels like during the selected window.'
-      },
-      data_confidence: 'medium',
-      sources: ['https://example.com']
-    }),
-    `context=${JSON.stringify({
-      destination,
-      dateRange,
-      origin: options.origin || null,
-      route: options.route || 'travelintel'
-    })}`
+    '  { destination:string, dateRange:{start,end},',
+    '    aspects:{ shopping|relaxation|luxury|food|sightseeing|value|festival:',
+    '              { level:"high"|"medium"|"low"|null, note:string|null, note_i18n:{zh:string|null,en:string|null} } },',
+    '    summary:string, summary_i18n:{zh:string,en:string},',
+    '    data_confidence:"high"|"medium"|"low", sources:string[] }',
+    `context=${JSON.stringify({ destination, dateRange, origin: options.origin || null })}`
   ].join('\n');
 
   try {

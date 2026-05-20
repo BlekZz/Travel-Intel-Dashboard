@@ -149,6 +149,21 @@ app.use(express.json());
 app.use(express.static(PUBLIC_DIR));
 
 logStartupAudit(ROUTE_DEFINITIONS);
+
+// ── Dev mock mode ─────────────────────────────────────────────────────────────
+// When DEV_MOCK=true, mount the mock router BEFORE real routes.
+// All /api/* calls are intercepted; no external API is ever contacted.
+const devMockModule = require('./services/devMock');
+if (devMockModule.isDevMock()) {
+  const devMockRouter = require('./routes/devMockRouter');
+  app.use('/api', devMockRouter);
+  console.log(`[startup] ⚠️  DEV_MOCK=true — serving mock data (${devMockModule.getDatasetLabel()})`);
+  console.log('[startup]    All /api/* calls return fixture data. Set DEV_MOCK=false to use real APIs.');
+} else {
+  console.log('[startup] DEV_MOCK=false — real API routes active');
+}
+// ──────────────────────────────────────────────────────────────────────────────
+
 mountConfiguredRoutes(ROUTE_DEFINITIONS);
 
 app.use('/api', (req, res) => {

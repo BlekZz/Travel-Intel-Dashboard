@@ -572,9 +572,18 @@
         </div>
       </div>
       <div class="advice-banner__grid">
-        <div><strong>${texts.bestBooking}:</strong> ${escapeHtml(formatWeeksBefore(data.bestBookingWeeksBefore, texts))}</div>
-        <div><strong>${texts.targetPriceLabel}:</strong> ${escapeHtml(formatCurrency(data.targetPriceTwd))}</div>
-        <div><strong>${texts.deviation}:</strong> ${escapeHtml(formatPercent(deviation))}</div>
+        <div class="advice-metric">
+          <div class="advice-metric__label">${escapeHtml(texts.bestBooking)}</div>
+          <div class="advice-metric__val">${escapeHtml(formatWeeksBefore(data.bestBookingWeeksBefore, texts))}</div>
+        </div>
+        <div class="advice-metric">
+          <div class="advice-metric__label">${escapeHtml(texts.targetPriceLabel)}</div>
+          <div class="advice-metric__val">${escapeHtml(formatCurrency(data.targetPriceTwd))}</div>
+        </div>
+        <div class="advice-metric">
+          <div class="advice-metric__label">${escapeHtml(texts.deviation)}</div>
+          <div class="advice-metric__val">${escapeHtml(formatPercent(deviation))}</div>
+        </div>
       </div>
       <div class="advice-banner__section">
         <strong>${texts.riskNotes}:</strong>
@@ -697,6 +706,19 @@
     }
   }
 
+  function calculateScaleBounds(values, percentage = 0.2) {
+    const valid = values.filter((v) => Number.isFinite(v));
+    if (!valid.length) return { min: undefined, max: undefined };
+    const minVal = Math.min(...valid);
+    const maxVal = Math.max(...valid);
+    const range = maxVal - minVal;
+    const padding = range * percentage || minVal * 0.1 || 1000;
+    const minScale = Math.max(0, Math.floor((minVal - padding) / 100) * 100);
+    const yMaxBase = maxVal + padding;
+    const maxScale = Math.ceil(yMaxBase / 100) * 100;
+    return { min: minScale, max: maxScale };
+  }
+
   function renderYoyChart(data, isOk) {
     const canvas = document.getElementById('chart-yoy');
     if (!canvas || typeof Chart === 'undefined') return;
@@ -709,6 +731,8 @@
     const combinedAverage = average([...currentYearData, ...priorYearData]);
     const labels = texts.isZh ? MONTH_LABELS_ZH : MONTH_LABELS_EN;
     const hasData = currentYearData.some(Number.isFinite) || priorYearData.some(Number.isFinite);
+
+    const yoyBounds = calculateScaleBounds([...currentYearData, ...priorYearData].filter(Number.isFinite), 0.2);
 
     setChartMeta(canvas, 'price-history-yoy-meta', data.data_confidence || 'medium', hasData
       ? `${texts.currentYear}: ${formatCurrency(currentAverage)} · ${texts.priorYear}: ${formatCurrency(priorAverage)}`
@@ -757,7 +781,14 @@
         interaction: { intersect: false, mode: 'index' },
         plugins: {
           title: { display: false },
-          legend: { position: 'bottom' },
+          legend: {
+            position: 'bottom',
+            labels: {
+              boxWidth: 35,
+              boxHeight: 2,
+              color: getCssVar('--color-text-secondary', '#64748B'),
+            }
+          },
           tooltip: {
             callbacks: {
               label(context) {
@@ -776,6 +807,8 @@
         scales: {
           y: {
             title: { display: true, text: texts.priceAxis },
+            min: yoyBounds.min,
+            max: yoyBounds.max,
           },
         },
       },
@@ -831,6 +864,12 @@
     const targetPrice = Number.isFinite(adviceData.targetPriceTwd) ? adviceData.targetPriceTwd : null;
     const averageWeekly = average(weeklySeries);
 
+    const allFullYearVals = [...weeklySeries].filter(Number.isFinite);
+    if (targetPrice !== null && Number.isFinite(targetPrice)) {
+      allFullYearVals.push(targetPrice);
+    }
+    const fullYearBounds = calculateScaleBounds(allFullYearVals, 0.2);
+
     setChartMeta(canvas, 'price-history-fullyear-meta', adviceData.data_confidence || 'low', hasData
       ? `${texts.currentYear}: ${formatCurrency(averageWeekly)} · ${texts.targetPriceLabel}: ${formatCurrency(targetPrice)}`
       : `${texts.noTrendData}${isOk ? '' : ` · ${texts.fallback}`}`, trendData.meta);
@@ -868,7 +907,14 @@
         maintainAspectRatio: false,
         interaction: { intersect: false, mode: 'index' },
         plugins: {
-          legend: { position: 'bottom' },
+          legend: {
+            position: 'bottom',
+            labels: {
+              boxWidth: 35,
+              boxHeight: 2,
+              color: getCssVar('--color-text-secondary', '#64748B'),
+            }
+          },
           tooltip: {
             callbacks: {
               label(context) {
@@ -885,6 +931,8 @@
           },
           y: {
             title: { display: true, text: texts.priceAxis },
+            min: fullYearBounds.min,
+            max: fullYearBounds.max,
           },
         },
       },

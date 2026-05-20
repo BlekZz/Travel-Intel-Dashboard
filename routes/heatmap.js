@@ -48,12 +48,12 @@ function clamped(value, max) {
 
 router.get('/heatmap', async (req, res) => {
   try {
-    const { destination = 'NRT', year, type = 'outbound' } = req.query;
+    const { origin = 'TPE', destination = 'NRT', year, type = 'outbound' } = req.query;
     const targetYear = Number.parseInt(year, 10) || new Date().getUTCFullYear();
     const normalizedType = type === 'return' ? 'return' : 'outbound';
     const anchorDate = `${targetYear}-08-15`;
     const snapshot = await flightSnapshot.getFlightSnapshot({
-      origin: 'TPE',
+      origin,
       destination,
       departureDate: anchorDate,
       cabin: 'economy',

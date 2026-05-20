@@ -869,3 +869,66 @@ window.TravelIntel.priceHistory = {
 ---
 
 *本文件由 Claude Code 根據 Travel_Intel_Dashboard_PRD_v1.0.docx 自動生成。*
+
+---
+
+---
+
+# UI/UX Pro Max Skill 整合
+
+> 已安裝版本：從 [nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) 移植
+> Skill 文件路徑：`docs/skills/ui-ux-pro-max.md`
+
+## 適用 Agent
+
+**Agent-D（CSS 設計系統）** 和所有涉及前端 UI 工作的 Agent（A/E/F/G/H/I）在執行任何視覺設計、CSS 撰寫、元件樣式或互動實作之前，**必須**以 `IsSkillFile: true` 讀取 `docs/skills/ui-ux-pro-max.md`，並依其規則執行。
+
+## 觸發條件（何時必須讀取 Skill）
+
+在以下任何情況發生時，必須先讀取 skill 文件再開始工作：
+
+- 新增或修改 CSS（`main.css`, `components.css`, `charts.css`）
+- 設計或實作 UI 元件（card, modal, button, badge, skeleton, toast）
+- 選擇配色系統、字型配對或視覺風格
+- 實作動畫或互動狀態（hover, active, disabled, loading）
+- 建立響應式版面（breakpoints, mobile-first）
+- 做 UI Code Review
+
+## Skill 核心規則摘要（10 優先順序）
+
+| 優先 | 類別 | 關鍵要求 |
+|------|------|---------|
+| 1 | 無障礙 | 對比度 4.5:1、focus ring、aria-label、鍵盤導航 |
+| 2 | 觸控互動 | 最小 44×44px、8px 間距、cursor-pointer、載入狀態 |
+| 3 | 效能 | WebP/AVIF、lazy loading、防 CLS、font-display: swap |
+| 4 | 風格選擇 | 產品類型匹配、SVG icons（禁用 emoji）、一致性 |
+| 5 | 版面響應式 | mobile-first、breakpoints 375/768/1024/1440 |
+| 6 | 字型色彩 | body min 16px、line-height 1.5、語意色彩 token |
+| 7 | 動畫 | 150–300ms、transform/opacity only、exit 比 enter 快 |
+| 8 | 表單反饋 | 可見 label、錯誤置於欄位下方、Submit loading 狀態 |
+| 9 | 導航模式 | 底部導航 ≤5 項、深度連結、可預測的返回行為 |
+| 10 | 圖表資料 | 圖例 + Tooltip、色盲友善、不能只靠顏色傳達資訊 |
+
+## 本專案設計系統對照
+
+| UI/UX Pro Max 規則 | 本專案實作 |
+|-------------------|-----------|
+| 語意色彩 token | `--color-primary`, `--color-accent`, `--color-danger` 等 |
+| 卡片圓角 | `--radius-card: 12px` |
+| z-index 分層 | `--z-modal: 100`, `--z-nav: 70` 等 |
+| Dark/Light 主題 | `.theme-dark` / `.theme-light` body class |
+| Skeleton loading | `.skeleton--card`, `.skeleton--row`, `.skeleton--chart` |
+| AI 可信度標示 | `.badge--ai` / `.badge--ai-warn` / `.badge--ai-low` |
+
+## 使用方式
+
+當 Antigravity 的任何 subagent 要執行前端 UI 工作時，應在開始前讀取此 skill：
+
+```
+view_file(
+  AbsolutePath: "C:/Users/lolz_/Desktop/Travel-Intel-Dashboard/docs/skills/ui-ux-pro-max.md",
+  IsSkillFile: true
+)
+```
+
+讀取後，依照 skill 的「Rule Categories by Priority」由高到低套用規則，並在完成後自我 review「Pre-delivery Checklist」。

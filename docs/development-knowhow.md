@@ -1,8 +1,111 @@
 # Travel Intel Dashboard Development Know-How
 
-Last updated: 2026-05-19
+Last updated: 2026-05-20
 
 This file records implementation lessons that should be reused in future work to avoid rediscovering the same pitfalls.
+
+---
+
+## 0. Dev Mock Mode (`DEV_MOCK=true`)
+
+### 目的
+
+在調整 UI/CSS 時，避免每次頁面重整都觸發 Gemini / SerpApi / fli / OpenWeatherMap 的實際 API 呼叫，浪費有限的免費配額。
+
+### 使用方式
+
+**開啟 mock 模式（UI 開發期間）：**
+```bash
+# .env
+DEV_MOCK=true
+```
+
+**關閉 mock 模式（測試真實 API）：**
+```bash
+# .env
+DEV_MOCK=false
+```
+
+重啟 server 後，啟動日誌會明確顯示目前模式：
+```
+[startup] ⚠️  DEV_MOCK=true — serving mock data (mock-A (Tokyo summer peak))
+[startup]    All /api/* calls return fixture data. Set DEV_MOCK=false to use real APIs.
+```
+或
+```
+[startup] DEV_MOCK=false — real API routes active
+```
+
+### 運作機制
+
+- `server.js` 在掛載真實 routes **之前**，先掛載 `routes/devMockRouter.js`
+- Mock router 攔截所有 `/api/*` 請求並回傳對應的 fixture data
+- **不接觸任何外部服務**，response time < 5ms
+- 每個 response 帶有 `_mock: true` 欄位與 `X-Dev-Mock: true` / `X-Dev-Mock-Dataset: <label>` HTTP headers，在 DevTools Network 面板一眼可辨
+
+### 兩組 Datasets
+
+資料集在 server 啟動時**隨機選一組**，該 session 全程固定（同一組資料，各端點一致）。
+
+| Dataset | 場景 | 亮點 |
+|---|---|---|
+| **A — Tokyo summer peak** | 8 月旺季，高消費、多節慶 | festival=high, food=high, value=low, 機票 NT$11,500 |
+| **B — Tokyo winter off-peak** | 1 月淡季，超值、購物黃金期 | shopping=high, luxury=high, value=high, 機票 NT$8,900 |
+
+兩組資料都包含：
+- `/api/dashboard` — 機票均價 + 飯店均價 + 天氣
+- `/api/travelintel` — 7 面向完整分析（中英雙語 note_i18n）
+- `/api/booking-advice` — 購票建議（中英雙語 riskNotes_i18n）
+- `/api/flight-trend` — 7 天趨勢折線
+- `/api/price-history` — 12 個月 YOY 資料
+- `/api/heatmap` — 365 天熱力圖（以全年季節性公式生成）
+- `/api/flights` — 4 筆假航班
+- `POST /api/fun-score` — 從 travelintel aspects 反推的好玩指數
+
+### 相關檔案
+
+| 檔案 | 說明 |
+|---|---|
+| `services/devMock.js` | 兩組完整 datasets + `isDevMock()` / `getDataset()` 工具函式 |
+| `routes/devMockRouter.js` | Express router，各端點 handler |
+| `server.js` L.152-168 | Mock router 掛載邏輯 |
+| `.env` `DEV_MOCK=` | 開關旗標 |
+
+### 新增或修改 Dataset 的方式
+
+1. 開啟 `services/devMock.js`
+2. 在 `DATASET_A` 或 `DATASET_B` 修改對應欄位
+3. 若要新增第三組，在 `DATASETS` 陣列加入新物件即可，`SESSION_DATASET` 會自動隨機選取
+
+### 注意事項
+
+- `_mock: true` 欄位不影響前端 normalization，所有 render 路徑都正常走過
+- `/api/quota` 端點**不被 mock 攔截**（quota router 仍從真實 provider-usage.json 讀取）
+- CI/CD 環境應確保 `DEV_MOCK=false`（或直接不設定，預設 false）
+
+---
+
+## 1. Gemini 模型選擇與配額
+
+### 模型比較（2026-05）
+
+| 模型 | 免費 RPD | 輸出品質 | 建議場景 |
+|---|---|---|---|
+| `gemini-2.5-flash` | 20/天 | ★★★★★ | 最終 production 驗證 |
+| `gemini-1.5-flash` | 1500/天 | ★★★★☆ | 日常開發 + UI 測試 |
+| `gemini-2.0-flash-lite` | 200/天 | ★★★☆☆ | 備選方案 |
+
+目前 `.env` 預設為 `GEMINI_MODEL=gemini-1.5-flash`。
+
+### 切換方式
+
+```bash
+# .env
+GEMINI_MODEL=gemini-1.5-flash    # 日常開發（免費額度足夠）
+GEMINI_MODEL=gemini-2.5-flash    # 品質驗證（需節制使用）
+```
+
+---
 
 ## 1. Flight provider execution on Windows
 
@@ -297,3 +400,53 @@ That avoids executing `fli.exe` directly while still using the same official `fl
   - browser visual QA
   - quota/cooldown operational state
 - This prevents false conclusions such as "backend broken" when the actual issue is a frontend state or rate-limit artifact.
+
+## 27. Lock container height before innerHTML clear to eliminate layout jumps
+
+- When switching between data states that require clearing a container's innerHTML (e.g. heatmap Outbound ↔ Return toggle), the page height will jump if the new content is shorter during the loading skeleton phase.
+- Pattern to prevent this:
+  ```js
+  const currentHeight = container.offsetHeight;
+  if (currentHeight > 0) {
+    container.style.minHeight = `${currentHeight}px`;
+  }
+  container.innerHTML = '<div class="skeleton skeleton--chart"></div>';
+  try {
+    // ... fetch and render ...
+  } finally {
+    container.style.minHeight = ''; // always restore
+  }
+  ```
+- The `finally` block is critical — it guarantees cleanup even on errors or early returns.
+- Do NOT set `minHeight` in CSS permanently; that would prevent shorter content states from collapsing naturally after initial load.
+- This same pattern should be applied to any panel that can switch between a skeleton and a variable-height result: heatmap, price history advice banner, travelintel panel.
+
+## 28. Sort AI-ranked cards by confidence level, then alphabetically
+
+- When rendering a set of AI-assessed dimension cards (e.g. 7 travel aspects), do not rely on a fixed array order.
+- Define a score mapping: `{ high: 3, medium: 2, low: 1, undefined: 0 }`.
+- Sort by descending score first, then by localized title via `localeCompare`.
+- Use the `Intl` locale hint (`'zh-Hant'` vs `'en'`) to match the app's current language.
+  ```js
+  const levelScores = { high: 3, medium: 2, low: 1 };
+  const sortedKeys = [...ASPECT_KEYS].sort((a, b) => {
+    const scoreA = levelScores[aspects[a]?.level] || 0;
+    const scoreB = levelScores[aspects[b]?.level] || 0;
+    if (scoreA !== scoreB) return scoreB - scoreA;
+    return (labels[a] || '').localeCompare(labels[b] || '', isChinese() ? 'zh-Hant' : 'en');
+  });
+  ```
+- This makes the most relevant (highest confidence) items immediately visible at the top-left of a grid without requiring the user to scan the entire layout.
+
+## 29. DEV_MOCK nodemon does NOT auto-reload on .env changes
+
+- `nodemon` watches `*.js`, `*.json` files by default; it does **not** watch `.env`.
+- Changing `DEV_MOCK=true` in `.env` will NOT trigger an automatic server restart.
+- Correct workflow to switch mock mode:
+  1. Edit `.env`
+  2. Kill the running server (Ctrl+C or kill background task)
+  3. Restart with `npm run dev`
+- The startup log will immediately confirm the new mode:
+  - Mock: `⚠️  DEV_MOCK=true — serving mock data`
+  - Real: `DEV_MOCK=false — real API routes active`
+- Do not debug "mock not working" without first verifying the server was restarted after the `.env` change.

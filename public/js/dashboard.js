@@ -231,15 +231,31 @@
 
   function getLevelBadge(level) {
     if (level === 'high') {
-      return { label: t('High', '高'), className: 'badge badge--level-high' };
+      return {
+        label: t('High', '高'),
+        className: 'badge badge--level-high',
+        icon: `<svg class="level-icon level-icon--high" fill="none" stroke="currentColor" stroke-width="3.5" viewBox="0 0 24 24" width="16" height="16" style="margin-right: 4px; display: inline-block; vertical-align: middle;"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" /></svg>`
+      };
     }
     if (level === 'medium') {
-      return { label: t('Medium', '中'), className: 'badge badge--level-medium' };
+      return {
+        label: t('Medium', '中'),
+        className: 'badge badge--level-medium',
+        icon: `<svg class="level-icon level-icon--medium" fill="none" stroke="currentColor" stroke-width="3.5" viewBox="0 0 24 24" width="16" height="16" style="margin-right: 4px; display: inline-block; vertical-align: middle;"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14" /></svg>`
+      };
     }
     if (level === 'low') {
-      return { label: t('Low', '低'), className: 'badge badge--level-low' };
+      return {
+        label: t('Low', '低'),
+        className: 'badge badge--level-low',
+        icon: `<svg class="level-icon level-icon--low" fill="none" stroke="currentColor" stroke-width="3.5" viewBox="0 0 24 24" width="16" height="16" style="margin-right: 4px; display: inline-block; vertical-align: middle;"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>`
+      };
     }
-    return { label: t('Pending', '待補'), className: 'badge badge--provider-warn' };
+    return {
+      label: t('Pending', '待補'),
+      className: 'badge badge--provider-warn',
+      icon: `<svg class="level-icon level-icon--pending" fill="none" stroke="currentColor" stroke-width="3.5" viewBox="0 0 24 24" width="16" height="16" style="margin-right: 4px; display: inline-block; vertical-align: middle;"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" /></svg>`
+    };
   }
 
   function escapeHtml(value) {
@@ -304,10 +320,17 @@
     const titleEl = document.getElementById('dashboard-title');
     if (!titleEl || !track) return;
     const destinationText = track.destination || t('Destination pending', '目的地未設定');
-    const dateText = track.dateRange.start && track.dateRange.end
-      ? `[${track.dateRange.start} ~ ${track.dateRange.end}]`
-      : t('[Date pending]', '[日期未設定]');
-    titleEl.textContent = `${track.name} (${destinationText}) ${dateText}`;
+    const dateRangeHtml = track.dateRange.start && track.dateRange.end
+      ? `<span class="title-card__dates"><svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" width="14" height="14" style="vertical-align: middle; margin-right: 4px; opacity: 0.8;"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> ${escapeHtml(track.dateRange.start)} ~ ${escapeHtml(track.dateRange.end)}</span>`
+      : `<span class="title-card__dates title-card__dates--pending">${escapeHtml(t('Date pending', '日期未設定'))}</span>`;
+    
+    titleEl.innerHTML = `
+      <div class="title-card">
+        <span class="title-card__name">${escapeHtml(track.name)}</span>
+        <span class="title-card__airport">${escapeHtml(destinationText)}</span>
+        ${dateRangeHtml}
+      </div>
+    `;
   }
 
   function populateTrackingInputs(track) {
@@ -354,7 +377,8 @@
       const closeBtn = document.createElement('button');
       closeBtn.type = 'button';
       closeBtn.className = 'tracking-pill__close';
-      closeBtn.innerHTML = '&times;';
+      closeBtn.setAttribute('aria-label', t('Remove tracking', '刪除追蹤'));
+      closeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" width="14" height="14" style="width: 14px; height: 14px;"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>`;
       closeBtn.addEventListener('click', (event) => {
         event.stopPropagation();
         if (!window.confirm(t('Remove this tracking?', '要刪除這個追蹤嗎？'))) return;
@@ -385,11 +409,16 @@
   function renderFlightMetric(data) {
     const container = document.getElementById('metric-flight-price');
     if (!container) return;
+    const deltaClass = getDeltaClass(data.flightPriceDelta);
+    const hasDelta = coerceNumber(data.flightPriceDelta) !== null;
+    const deltaHtml = hasDelta 
+      ? `${formatPercent(data.flightPriceDelta)} <span class="delta-benchmark">${t('(vs prior month)', '(比上月)')}</span>`
+      : t('No comparison', '無比較資料');
     container.innerHTML = `
       <div class="metric-card">
         <div class="metric-card__label">${t('Flight Price', '機票均價')}</div>
         <div class="metric-card__value">${formatCurrency(data.avgFlightPrice)}</div>
-        <div class="metric-card__delta ${getDeltaClass(data.flightPriceDelta)}">${formatPercent(data.flightPriceDelta)}</div>
+        <div class="metric-card__delta ${deltaClass}">${deltaHtml}</div>
       </div>
     `;
   }
@@ -397,11 +426,16 @@
   function renderHotelMetric(data) {
     const container = document.getElementById('metric-hotel-price');
     if (!container) return;
+    const deltaClass = getDeltaClass(data.hotelPriceDelta, true);
+    const hasDelta = coerceNumber(data.hotelPriceDelta) !== null;
+    const deltaHtml = hasDelta
+      ? `${formatPercent(data.hotelPriceDelta)} <span class="delta-benchmark">${t('(vs prior month)', '(比上月)')}</span>`
+      : t('No comparison', '無比較資料');
     container.innerHTML = `
       <div class="metric-card">
         <div class="metric-card__label">${t('Hotel Price / Night', '飯店均價 / 晚')}</div>
         <div class="metric-card__value">${formatCurrency(data.avgHotelPrice)}</div>
-        <div class="metric-card__delta ${getDeltaClass(data.hotelPriceDelta, true)}">${formatPercent(data.hotelPriceDelta)}</div>
+        <div class="metric-card__delta ${deltaClass}">${deltaHtml}</div>
       </div>
     `;
   }
@@ -438,9 +472,14 @@
     const badgeClass = getConfidenceClass(payload && payload.data_confidence);
     const meta = payload && payload.meta ? payload.meta : {};
     const retryState = getTravelIntelRetryState();
-    const valueText = counts.high > 0
-      ? `${counts.high} ${t('High', '高')}`
-      : (counts.medium > 0 ? `${counts.medium} ${t('Medium', '中')}` : '—');
+    
+    let valueText = '—';
+    if (counts.high > 0) {
+      valueText = `<span class="star-rating">${'★'.repeat(counts.high)}</span>`;
+    } else if (counts.medium > 0) {
+      valueText = `<span class="star-rating star-rating--medium">${'★'.repeat(counts.medium)}</span>`;
+    }
+
     const summary = payload
       ? selectLocalizedText(payload.summary_i18n, payload.summary)
       : t('Awaiting travel window analysis', '等待旅遊時段分析');
@@ -452,13 +491,26 @@
 
     container.innerHTML = `
       <div class="metric-card">
-        <div class="metric-card__label">${t('travelintel', 'travelintel')} <span class="badge ${badgeClass}">${escapeHtml(payload && payload.data_confidence === 'high' ? t('AI Live', 'AI Live') : t('AI Analysis', 'AI 分析'))}</span></div>
-        <div class="metric-card__value">${escapeHtml(valueText)}</div>
+        <div class="metric-card__label">${t('AI Summary', 'AI 摘要')} <span class="badge ${badgeClass}">${escapeHtml(payload && payload.data_confidence === 'high' ? t('AI Live', 'AI Live') : t('AI Analysis', 'AI 分析'))}</span></div>
+        <div class="metric-card__value">${valueText}</div>
         <div class="metric-card__delta">${escapeHtml(summary)}</div>
         ${retryLine}
         <div class="subtle-note" title="${escapeHtml(t('Repeated refreshes can exhaust free-tier quotas or trigger throttling.', '頻繁刷新可能耗盡免費額度，或觸發暫時性節流。'))}">${escapeHtml(t('Search only re-runs travelintel when destination or dates change.', '只有在目的地或日期改變時，Search 才會重跑 travelintel。'))}</div>
       </div>
     `;
+  }
+
+  function getAspectIcon(key) {
+    const icons = {
+      shopping: `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>`,
+      relaxation: `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>`,
+      luxury: `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L12 4l6 8-6 8-6-8z" /></svg>`,
+      food: `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 16v-2m0 2a2 2 0 100-4m0 4a2 2 0 110-4m0-4V4" /></svg>`,
+      sightseeing: `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>`,
+      value: `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2zM9 16h6M9 12h6M9 8h6" /></svg>`,
+      festival: `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>`
+    };
+    return icons[key] || '';
   }
 
   function renderTravelIntelPanel(payload) {
@@ -472,15 +524,39 @@
     if (meta.stale) sourceBadges.push(`<span class="badge badge--provider-stale">${escapeHtml(t('Stale', '舊快照'))}</span>`);
     if (meta.fallbackUsed) sourceBadges.push(`<span class="badge badge--provider-warn">${escapeHtml(t('Fallback', 'Fallback'))}</span>`);
 
-    const cards = ASPECT_KEYS.map((key) => {
+    const levelScores = {
+      high: 3,
+      medium: 2,
+      low: 1
+    };
+
+    const sortedKeys = [...ASPECT_KEYS].sort((a, b) => {
+      const entryA = aspects[a] || {};
+      const entryB = aspects[b] || {};
+      const scoreA = levelScores[entryA.level] || 0;
+      const scoreB = levelScores[entryB.level] || 0;
+
+      if (scoreA !== scoreB) {
+        return scoreB - scoreA; // Descending: High -> Medium -> Low -> Other
+      }
+
+      const titleA = labels[a] || '';
+      const titleB = labels[b] || '';
+      return titleA.localeCompare(titleB, isChinese() ? 'zh-Hant' : 'en');
+    });
+
+    const cards = sortedKeys.map((key) => {
       const entry = aspects[key] || {};
       const badge = getLevelBadge(entry.level);
+      const levelAttr = entry.level ? ` data-level="${escapeHtml(entry.level)}"` : '';
+      const iconHtml = getAspectIcon(key);
       return `
-        <article class="travelintel-card">
+        <article class="travelintel-card"${levelAttr}>
           <div class="travelintel-card__header">
-            <h4 class="travelintel-card__title">${escapeHtml(labels[key])}</h4>
-            <span class="${badge.className}">${escapeHtml(badge.label)}</span>
+            <div class="travelintel-card__icon">${iconHtml}</div>
+            <span class="${badge.className}">${badge.icon || ''}${escapeHtml(badge.label)}</span>
           </div>
+          <h4 class="travelintel-card__title">${escapeHtml(labels[key])}</h4>
           <p class="travelintel-card__note">${escapeHtml(selectLocalizedText(entry.note_i18n, entry.note) || t('No grounded note yet.', '目前尚無足夠依據。'))}</p>
         </article>
       `;
@@ -490,7 +566,7 @@
       <div class="travelintel-panel">
         <div class="travelintel-panel__header">
           <div>
-            <h3 class="travelintel-panel__title">${t('travelintel', 'travelintel')}</h3>
+            <h3 class="travelintel-panel__title">${t('Travel Dimension Analysis', '旅遊維度分析')}</h3>
             <p class="travelintel-panel__summary">${escapeHtml(payload ? (selectLocalizedText(payload.summary_i18n, payload.summary) || t('No travelintel summary yet.', '目前尚無 travelintel 總結。')) : t('No travelintel summary yet.', '目前尚無 travelintel 總結。'))}</p>
           </div>
           <div class="travelintel-panel__meta">
@@ -754,6 +830,24 @@
     const active = getActiveTrack();
     if (active) {
       activeTrackingId = active.id;
+    }
+
+    // Auto-fill date inputs with a sensible window if currently blank
+    const startEl = document.getElementById('dash-start');
+    const endEl = document.getElementById('dash-end');
+    if (startEl && !startEl.value) {
+      const now = new Date();
+      const start = new Date(now);
+      start.setDate(start.getDate() + 60);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      startEl.value = start.toISOString().slice(0, 10);
+      endEl.value = end.toISOString().slice(0, 10);
+      if (active) {
+        patchTrackingItem(active.id, {
+          dateRange: { start: startEl.value, end: endEl.value }
+        });
+      }
     }
 
     const addBtn = document.getElementById('tracking-add-btn');

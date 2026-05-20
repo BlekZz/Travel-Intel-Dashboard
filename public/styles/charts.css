@@ -85,32 +85,35 @@
 
 .heatmap-cell {
   position: relative;
-  border-radius: 4px;
+  border-radius: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.6rem;
-  font-weight: 600;
-  color: rgba(15, 23, 42, 0.72);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  opacity: 0.9;
   cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.15s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(0, 0, 0, 0.03);
 }
 
 .theme-dark .heatmap-cell {
-  color: rgba(255, 255, 255, 0.88);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.05);
 }
 
 .heatmap-cell:hover {
-  transform: scale(1.08);
+  transform: scale(1.18) translateY(-2px);
   z-index: 10;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
 .heatmap-cell--1 { background-color: var(--color-heatmap-1); }
 .heatmap-cell--2 { background-color: var(--color-heatmap-2); }
 .heatmap-cell--3 { background-color: var(--color-heatmap-3); }
 .heatmap-cell--4 { background-color: var(--color-heatmap-4); }
-.heatmap-cell--5 { background-color: var(--color-heatmap-5); color: #fff; }
+.heatmap-cell--5 { background-color: var(--color-heatmap-5); }
 
 #chart-heatmap {
   min-height: 16rem;
@@ -132,17 +135,20 @@
 #chartjs-tooltip {
   opacity: 1;
   position: absolute;
-  background: var(--color-surface) !important;
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   color: var(--color-text-primary) !important;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-card);
   pointer-events: none;
   transform: translate(-50%, 0);
-  transition: all .1s ease;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  padding: var(--spacing-sm);
+  transition: all .15s ease;
+  box-shadow: var(--shadow-premium);
+  padding: var(--spacing-sm) var(--spacing-md);
   z-index: var(--z-tooltip);
 }
+
 
 @media (prefers-reduced-motion: reduce) {
   .heatmap-cell,

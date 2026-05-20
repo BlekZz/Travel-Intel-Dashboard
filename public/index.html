@@ -49,14 +49,14 @@
 <body>
   <div class="container">
     <header class="app-header">
-      <h1 class="app-title">travelintel</h1>
+      <h1 id="app-title" class="app-title">travelintel</h1>
       <nav class="app-nav" aria-label="Primary">
           <button id="nav-dashboard" class="nav-btn active" type="button" role="tab" aria-controls="tab-dashboard" aria-selected="true">Dashboard</button>
           <button id="nav-flights" class="nav-btn" type="button" role="tab" aria-controls="tab-flights" aria-selected="false">Flights</button>
           <button id="nav-price-history" class="nav-btn" type="button" role="tab" aria-controls="tab-price-history" aria-selected="false">Price History</button>
       </nav>
       <div>
-        <button id="lang-toggle" class="theme-btn" type="button">繁體中文</button>
+        <button id="lang-toggle" class="theme-btn" type="button" aria-label="Toggle language">繁體中文</button>
         <button id="theme-toggle" class="theme-btn" type="button" aria-label="Toggle theme">Theme</button>
       </div>
     </header>
@@ -74,15 +74,28 @@
         </div>
 
         <div id="dashboard-search-bar" class="trip-search-bar">
-          <input type="text" id="dash-origin" placeholder="Origin (e.g. TPE)">
+          <div class="search-field">
+            <label id="label-origin" for="dash-origin" class="search-field__label">出發地</label>
+            <input type="text" id="dash-origin" placeholder="例：TPE" aria-label="Origin Airport Code">
+          </div>
           <div class="search-divider"></div>
-          <input type="text" id="dash-dest" placeholder="Destination (e.g. NRT)">
+          <div class="search-field">
+            <label id="label-dest" for="dash-dest" class="search-field__label">抵達地</label>
+            <input type="text" id="dash-dest" placeholder="例：NRT" aria-label="Destination Airport Code">
+          </div>
           <div class="search-divider"></div>
-          <input type="date" id="dash-start">
+          <div class="search-field">
+            <label id="label-start" for="dash-start" class="search-field__label">去程日期</label>
+            <input type="date" id="dash-start" aria-label="Departure Date">
+          </div>
           <div class="search-divider"></div>
-          <input type="date" id="dash-end">
+          <div class="search-field">
+            <label id="label-end" for="dash-end" class="search-field__label">回程日期</label>
+            <input type="date" id="dash-end" aria-label="Return Date">
+          </div>
           <button id="dash-search-btn" class="btn btn--primary" type="button" data-i18n="search">Search</button>
         </div>
+
 
         <div class="metrics-grid metrics-grid--dashboard">
             <div id="metric-fun-score"></div>
@@ -96,10 +109,9 @@
                <canvas id="chart-trend"></canvas>
            </div>
            <div class="panel panel--travelintel" id="slider-container"></div>
-        </div>
-
-        <div class="panel panel--heatmap mt-lg">
-            <div id="chart-heatmap"></div>
+           <div class="panel panel--heatmap">
+               <div id="chart-heatmap"></div>
+           </div>
         </div>
     </section>
 
