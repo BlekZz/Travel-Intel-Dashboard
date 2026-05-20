@@ -1,6 +1,6 @@
 # Travel Intel Dashboard Implementation Progress
 
-Last updated: 2026-05-19
+Last updated: 2026-05-20 (Session 2 — UI Redesign & Stabilization)
 
 ## Completed Work
 
@@ -242,15 +242,61 @@ Last updated: 2026-05-19
 - `flight-trend` backend itself was separately verified as healthy with non-fallback data.
 - The visible trend fallback behavior should therefore be treated as a frontend request-context or fallback-state presentation issue, not a provider outage in the core trend endpoint.
 
-## Next Repair Steps
+## UI Redesign & Stabilization — 2026-05-20 Session 2
 
-1. Re-verify live/fallback state after cooldown expiry with a smaller manual test budget.
-2. Inspect why the trend chart can present fallback state even when `/api/flight-trend` returns live provider data.
-3. Improve travelintel / booking-advice language separation so every AI text field consistently carries `*_i18n` payloads in both `zh` and `en`.
-4. Complete browser-level regression on the price-history charts to confirm the vertical growth bug is fully eliminated in repeated tab switches and scroll scenarios.
-5. Add a lightweight operator-facing status summary for Gemini routes so the UI can distinguish:
-   - fresh live
-   - cached live
-   - cooldown fallback
-   - deterministic fallback
-6. Only after the above, run a lower-frequency release smoke instead of repeated quota-heavy testing.
+A comprehensive premium UI/UX overhaul was applied to all three tabs. All items below are **completed and pushed to `master`**.
+
+### Visual Design System Overhaul
+- Redesigned CSS token palette with curated HSL colors, glassmorphism surfaces, premium shadows, and smooth transitions.
+- Implemented full dark / light mode with `prefers-color-scheme` auto-detection and persistent localStorage toggle.
+- Added skeleton loaders with pulsing shimmer animations to all loading states (cards, charts, rows).
+- Applied micro-animations: card hover lifts, button scale-down on click, tab transition fades.
+
+### Dashboard Tab
+- **Two-row Bento Grid**: Restructured `.travelintel-grid` to 12-column CSS Grid. First 4 cards = `span 3`; last 3 cards = `span 4` → equal width distribution on both rows.
+- **Sorted Dimension Cards**: 7 aspect cards now render sorted by AI level (High > Medium > Low > Pending), then alphabetically by localized title.
+- **AI Stars**: Renamed metric card to "AI摘要 / AI Summary". High dimensions shown as golden `★` stars with pulsing glow.
+- **Delta Benchmarks**: Flight/hotel price delta now appends `(比上月) / (vs prior month)` for clarity.
+- **Prominent Level Badges**: SVG chevron-up (green/High), horizontal bar (amber/Medium), chevron-down (red/Low) in dimension cards.
+- **Title Rename**: `travelintel` → `旅遊維度分析 / Travel Dimension Analysis`.
+- **Search Labels**: Added descriptive `出發地 / 抵達地 / 去程日期 / 回程日期` labels above inputs with focus-within highlight.
+
+### Charts — Trend & Heatmap
+- **Y-axis padding**: All line charts use `calculateScaleBounds()` adding 20% margin so lines never clip chart edges.
+- **Line Legends**: Chart.js legends show actual thin line/dash segments instead of fat rectangle boxes.
+- **Heatmap 3-month window**: Heatmap shows center month (outbound = start date, return = end date) ± 1 month; ← → navigation buttons to scroll.
+- **Heatmap height-lock**: Clicking 去程/回程 no longer causes page height jump; `offsetHeight` is locked before innerHTML clear and restored in `finally` block.
+- **Heatmap centering**: Month grids use `flex: 1 1 240px; maxWidth: 360px` and outer wrapper `justifyContent: center; flexWrap: wrap` for elastic, centered layout.
+
+### Flight Search Tab
+- **Title Rename**: `travelintel` → `旅遊搜尋助手 / Travel Search Assistant`.
+- **Premium Filter Chips**: Direct / Budget / Baggage filter buttons redesigned into large chips (`min-height: 2.75rem, border-radius: 24px`) with gradient glow when active.
+
+### Price History Tab
+- **AI Advice Banner Redesign**: Glassmorphic card with colored glow left-bar (green=buy, amber=wait, red=avoid). Key stats rendered as `.advice-metric` sub-cards.
+
+### Dev Infrastructure
+- **Mock Mode** (`DEV_MOCK=true`): Two fixture datasets (mock-A Tokyo summer peak, mock-B Tokyo winter off-peak) covering all `/api/*` endpoints. Zero API quota consumed during UI development.
+- **knowhow.md**: 3 new entries (#27 height-lock CLS pattern, #28 AI card sorting, #29 DEV_MOCK nodemon restart workflow).
+
+---
+
+## Current Backlog / Next Steps
+
+> Listed in priority order. Items marked ⬜ are **not yet started**.
+
+### High Priority
+- ⬜ **機場下拉選單**：將出發地/抵達地 text input 改為可搜尋的 autocomplete dropdown（候選清單來自 Amadeus 或靜態 IATA 機場資料庫）。UI 設計須支援鍵盤導覽與 dark/light 主題。
+- ⬜ **Trend chart fallback 診斷**：確認 `/api/flight-trend` 後端健康但前端仍顯示 fallback 的根本原因（request-context assembly 或 stale panel state）。
+- ⬜ **Travelintel i18n 一致性**：確保每個 Gemini 文字欄位都帶 `*_i18n: { zh, en }` 雙語 payload，避免 UI 中英混雜。
+
+### Medium Priority
+- ⬜ **Price-history 垂直成長 regression**：在多次 tab 切換和 scroll 場景中再次確認 chart 高度未持續累積增長。
+- ⬜ **operator status summary**：在 Gemini 相關 UI 面板加入 fresh live / cached live / cooldown fallback / deterministic fallback 的狀態標示。
+- ⬜ **Release smoke test**：在 mock 驗證完成後，以低頻率對 real API 路徑執行最終端到端 smoke（避免消耗配額）。
+
+### Low Priority / Nice to Have
+- ⬜ **Quota bar refinement**：依實際 Gemini free-tier 限制動態調整 quota bar 警示閾值。
+- ⬜ **Mobile layout pass**：在 375px / 390px 視口全面驗證所有三個分頁的排版。
+- ⬜ **E2E tests**：加入 Playwright 或 Cypress 基礎 smoke test，覆蓋 tab 切換、搜尋、主題切換、toast 顯示。
+
