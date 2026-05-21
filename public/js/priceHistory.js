@@ -369,11 +369,17 @@
   }
 
   function normalizeAdvicePayload(payload) {
+    const rawDeviation = payload?.currentPriceDeviationPct;
+    const rawTargetPrice = payload?.targetPriceTwd;
     return {
       currentPriceLevel: payload?.currentPriceLevel || null,
-      currentPriceDeviationPct: Number.isFinite(Number(payload?.currentPriceDeviationPct)) ? Number(payload.currentPriceDeviationPct) : null,
+      currentPriceDeviationPct: rawDeviation === null || rawDeviation === undefined || rawDeviation === ''
+        ? null
+        : (Number.isFinite(Number(rawDeviation)) ? Number(rawDeviation) : null),
       bestBookingWeeksBefore: payload?.bestBookingWeeksBefore || null,
-      targetPriceTwd: Number.isFinite(Number(payload?.targetPriceTwd)) ? Number(payload.targetPriceTwd) : null,
+      targetPriceTwd: rawTargetPrice === null || rawTargetPrice === undefined || rawTargetPrice === ''
+        ? null
+        : (Number.isFinite(Number(rawTargetPrice)) ? Number(rawTargetPrice) : null),
       confidence: payload?.confidence || payload?.data_confidence || 'low',
       riskNotes: safeArray(payload?.riskNotes).filter(Boolean),
       riskNotes_i18n: payload?.riskNotes_i18n || null,

@@ -13,39 +13,64 @@
 'use strict';
 
 const express = require('express');
-const { getDataset, getDatasetLabel } = require('../services/devMock');
+const { getDataset, getDatasetLabel, normalizeDatasetId } = require('../services/devMock');
 
 const router = express.Router();
 
-function mockJson(res, data) {
+function resolveDatasetId(req) {
+  return normalizeDatasetId(
+    req.query.mockDataset
+    || req.headers['x-dev-mock-dataset']
+    || process.env.DEV_MOCK_DATASET
+  );
+}
+
+function mockJson(res, data, datasetId) {
   res.setHeader('X-Dev-Mock', 'true');
-  res.setHeader('X-Dev-Mock-Dataset', getDatasetLabel());
+  res.setHeader('X-Dev-Mock-Dataset', getDatasetLabel(datasetId));
   res.json({ ...data, _mock: true });
+}
+
+function sendMockResponse(req, res, endpointKey, dataFactory) {
+  const datasetId = resolveDatasetId(req);
+  const dataset = getDataset(datasetId);
+  const override = dataset.responses && dataset.responses[endpointKey];
+  if (override) {
+    res.setHeader('X-Dev-Mock', 'true');
+    res.setHeader('X-Dev-Mock-Dataset', getDatasetLabel(datasetId));
+    return res.status(Number(override.status) || 500).json({
+      ...(override.body || {}),
+      _mock: true,
+      _mockFailure: true
+    });
+  }
+
+  return mockJson(res, dataFactory(dataset), datasetId);
 }
 
 // ── GET /api/dashboard ────────────────────────────────────────
 router.get('/dashboard', (req, res) => {
-  mockJson(res, getDataset().dashboard);
+  sendMockResponse(req, res, 'dashboard', (dataset) => dataset.dashboard);
 });
 
 // ── GET /api/travelintel ─────────────────────────────────────
 router.get('/travelintel', (req, res) => {
-  mockJson(res, getDataset().travelintel);
+  sendMockResponse(req, res, 'travelintel', (dataset) => dataset.travelintel);
 });
 
 // ── GET /api/booking-advice ──────────────────────────────────
 router.get('/booking-advice', (req, res) => {
-  mockJson(res, getDataset().bookingAdvice);
+  sendMockResponse(req, res, 'bookingAdvice', (dataset) => dataset.bookingAdvice);
 });
 
 // ── GET /api/flight-trend ─────────────────────────────────────
 router.get('/flight-trend', (req, res) => {
-  mockJson(res, getDataset().flightTrend);
+  sendMockResponse(req, res, 'flightTrend', (dataset) => dataset.flightTrend);
 });
 
 // ── GET /api/price-history ───────────────────────────────────
 router.get('/price-history', (req, res) => {
-  mockJson(res, getDataset().priceHistory);
+  sendMockResponse(req, res, 'priceHistory', (dataset) => dataset.priceHistory);
 });
 
 // ── GET /api/heatmap ─────────────────────────────────────────
@@ -55,6 +80,28 @@ router.get('/heatmap', (req, res) => {
   const normalizedType = type === 'return' ? 'return' : 'outbound';
 
   const devMock = require('../services/devMock');
+  const datasetId = resolveDatasetId(req);
+  const dataset = getDataset(datasetId);
+  const override = dataset.responses && dataset.responses.heatmap;
+  if (override) {
+    res.setHeader('X-Dev-Mock', 'true');
+    res.setHeader('X-Dev-Mock-Dataset', getDatasetLabel(datasetId));
+    return res.status(Number(override.status) || 500).json({
+      ...(override.body || {}),
+      _mock: true,
+      _mockFailure: true
+    });
+  }
+
+  if (dataset.heatmap) {
+    return mockJson(res, {
+      destination: dataset.heatmap.destination,
+      year: dataset.heatmap.year,
+      type: normalizedType,
+      days: Array.isArray(dataset.heatmap.days) ? dataset.heatmap.days : [],
+      meta: dataset.heatmap.meta || devMock.buildMeta({ provider: 'dev_mock_heatmap' })
+    }, datasetId);
+  }
 
   let basePrice = 9500;
   if (destination !== 'NRT') {
@@ -74,18 +121,19 @@ router.get('/heatmap', (req, res) => {
     type: normalizedType,
     days,
     meta: devMock.buildMeta({ provider: 'dev_mock_heatmap' })
-  });
+  }, datasetId);
 });
 
 // ── GET /api/flights ─────────────────────────────────────────
 router.get('/flights', (req, res) => {
-  mockJson(res, getDataset().flights);
+  sendMockResponse(req, res, 'flights', (dataset) => dataset.flights);
 });
 
 // ── POST /api/fun-score ──────────────────────────────────────
 // Fun score is triggered by slider interaction — return a fixed plausible score.
 router.post('/fun-score', (req, res) => {
-  const ds = getDataset();
+  const datasetId = resolveDatasetId(req);
+  const ds = getDataset(datasetId);
   // Derive dimension scores from the travelintel aspects for coherence
   const levelToScore = { high: 82, medium: 60, low: 38 };
   const aspects = ds.travelintel.aspects || {};
@@ -102,7 +150,7 @@ router.post('/fun-score', (req, res) => {
     note: ds.travelintel.summary_i18n?.zh || ds.travelintel.summary,
     data_confidence: ds.travelintel.data_confidence,
     sources: ds.travelintel.sources
-  });
+  }, datasetId);
 });
 
 // ── GET /api/quota ───────────────────────────────────────────

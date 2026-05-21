@@ -62,6 +62,28 @@
     return Number.isFinite(num) ? num : null;
   }
 
+  function buildTrendFailureMessage(error) {
+    const message = String(error && error.message ? error.message : '');
+    if (/^Trend API \d+/i.test(message)) {
+      return t(
+        'Trend chart fallback mode: the backend /api/flight-trend request failed.',
+        '趨勢圖進入 fallback mode：後端 /api/flight-trend 請求失敗。'
+      );
+    }
+
+    if (/Failed to parse trend payload/i.test(message)) {
+      return t(
+        'Trend chart fallback mode: the trend payload shape was invalid.',
+        '趨勢圖進入 fallback mode：trend payload 格式無效。'
+      );
+    }
+
+    return t(
+      'Trend chart fallback mode: the frontend render path failed.',
+      '趨勢圖進入 fallback mode：前端 render 流程失敗。'
+    );
+  }
+
   function average(values) {
     const valid = values.filter((value) => Number.isFinite(value));
     if (!valid.length) return null;
@@ -84,6 +106,10 @@
   }
 
   function showToast(message, type) {
+    const dashboardPanel = document.getElementById('tab-dashboard');
+    if (dashboardPanel && dashboardPanel.hidden) {
+      return;
+    }
     const app = getApp();
     if (typeof app.showToast === 'function') {
       app.showToast(message, type);
@@ -319,11 +345,17 @@
 
     try {
       const response = await fetch(`/api/flight-trend?destination=${encodeURIComponent(destination)}${getTrackingQuery(destination)}`);
-      if (!response.ok) throw new Error(`Trend API ${response.status}`);
+      if (!response.ok) {
+        const responseText = await response.text().catch(() => '');
+        throw new Error(`Trend API ${response.status}${responseText ? `: ${responseText}` : ''}`);
+      }
 
       const payload = await response.json();
       if (requestId !== trendRequestSequence) return;
       const trend = Array.isArray(payload.trend) ? payload.trend : [];
+      if (!Array.isArray(payload.trend) && payload.trend !== undefined && payload.trend !== null) {
+        throw new Error('Failed to parse trend payload');
+      }
 
       const labels = trend.map((item) => item.date || '');
       const flightPrices = trend.map((item) => normalizeNumber(item.avgFlightPrice));
@@ -355,9 +387,6 @@
 
       container.classList.remove('skeleton', 'skeleton--chart');
 
-      if (!trend.length) {
-        showToast(t('Trend chart has no data.', '趨勢圖目前沒有資料。'), 'warning');
-      }
     } catch (error) {
       if (requestId !== trendRequestSequence) return;
       container.classList.remove('skeleton', 'skeleton--chart');
@@ -387,8 +416,7 @@
         }, null, null)
       });
 
-      showToast(t('Trend chart entered fallback mode because the frontend render path failed or the trend request did not complete.', '趨勢圖進入 fallback mode，原因是前端 render 流程失敗或 trend 請求未完成。'), 'warning');
-      console.error(error);
+      console.warn(error);
     }
   }
 
@@ -801,7 +829,6 @@
       buildHeatmapLegend(container);
       buildEmptyHeatmapState(container, t('Heatmap unavailable. Rendering fallback state.', '熱力圖目前不可用，已顯示 fallback 狀態。'));
       console.error(error);
-      showToast(t('Heatmap fallback mode.', '熱力圖已切到 fallback 顯示。'), 'warning');
     } finally {
       if (requestId !== heatmapRequestSequence) return;
       // Restore default min-height style
