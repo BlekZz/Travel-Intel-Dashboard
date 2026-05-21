@@ -8,6 +8,8 @@
   let heatmapType = 'outbound';
   let lastHeatmapPayload = null;
   let currentCenterMonth = null;
+  let trendRequestSequence = 0;
+  let heatmapRequestSequence = 0;
 
   function getApp() {
     return (window.TravelIntel && window.TravelIntel.app) || {};
@@ -302,6 +304,7 @@
   }
 
   async function renderTrendChart(destination) {
+    const requestId = ++trendRequestSequence;
     const canvas = document.getElementById('chart-trend');
     if (!canvas) return;
 
@@ -319,6 +322,7 @@
       if (!response.ok) throw new Error(`Trend API ${response.status}`);
 
       const payload = await response.json();
+      if (requestId !== trendRequestSequence) return;
       const trend = Array.isArray(payload.trend) ? payload.trend : [];
 
       const labels = trend.map((item) => item.date || '');
@@ -355,6 +359,7 @@
         showToast(t('Trend chart has no data.', '趨勢圖目前沒有資料。'), 'warning');
       }
     } catch (error) {
+      if (requestId !== trendRequestSequence) return;
       container.classList.remove('skeleton', 'skeleton--chart');
       if (trendChartInstance) {
         trendChartInstance.destroy();
@@ -698,6 +703,7 @@
   }
 
   async function renderHeatmap(destination) {
+    const requestId = ++heatmapRequestSequence;
     const container = document.getElementById('chart-heatmap');
     if (!container) return;
 
@@ -716,6 +722,7 @@
       if (!response.ok) throw new Error(`Heatmap API ${response.status}`);
 
       const payload = await response.json();
+      if (requestId !== heatmapRequestSequence) return;
       lastHeatmapPayload = payload;
 
       const originalDays = Array.isArray(payload.days) ? payload.days : [];
@@ -788,6 +795,7 @@
       container.appendChild(wrapper);
       ensurePopover(wrapper);
     } catch (error) {
+      if (requestId !== heatmapRequestSequence) return;
       container.innerHTML = '';
       buildHeatmapHeader(container);
       buildHeatmapLegend(container);
@@ -795,6 +803,7 @@
       console.error(error);
       showToast(t('Heatmap fallback mode.', '熱力圖已切到 fallback 顯示。'), 'warning');
     } finally {
+      if (requestId !== heatmapRequestSequence) return;
       // Restore default min-height style
       container.style.minHeight = '';
     }

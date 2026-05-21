@@ -50,7 +50,7 @@
   <div class="container">
     <header class="app-header">
       <h1 id="app-title" class="app-title">travelintel</h1>
-      <nav class="app-nav" aria-label="Primary">
+      <nav class="app-nav" aria-label="Primary" role="tablist">
           <button id="nav-dashboard" class="nav-btn active" type="button" role="tab" aria-controls="tab-dashboard" aria-selected="true">Dashboard</button>
           <button id="nav-flights" class="nav-btn" type="button" role="tab" aria-controls="tab-flights" aria-selected="false">Flights</button>
           <button id="nav-price-history" class="nav-btn" type="button" role="tab" aria-controls="tab-price-history" aria-selected="false">Price History</button>
@@ -61,7 +61,7 @@
       </div>
     </header>
 
-    <div id="toast-container"></div>
+    <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
 
     <!-- Dashboard Tab -->
     <section id="tab-dashboard" class="tab-panel" role="tabpanel" aria-labelledby="nav-dashboard">

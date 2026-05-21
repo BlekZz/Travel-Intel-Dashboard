@@ -169,13 +169,13 @@
     controls.className = 'trip-search-bar trip-search-bar--compact';
     controls.id = 'ph-controls';
     controls.innerHTML = `
-      <input type="text" id="ph-origin" placeholder="Origin" maxlength="3">
+      <input type="text" id="ph-origin" placeholder="Origin" maxlength="3" aria-label="Origin airport code">
       <div class="search-divider"></div>
-      <input type="text" id="ph-dest" placeholder="Dest" maxlength="3">
+      <input type="text" id="ph-dest" placeholder="Dest" maxlength="3" aria-label="Destination airport code">
       <div class="search-divider"></div>
-      <input type="number" id="ph-year" min="2000" max="2100" placeholder="Year">
+      <input type="number" id="ph-year" min="2000" max="2100" placeholder="Year" aria-label="Year">
       <div class="search-divider"></div>
-      <input type="number" id="ph-month" min="1" max="12" placeholder="Month">
+      <input type="number" id="ph-month" min="1" max="12" placeholder="Month" aria-label="Month">
       <button id="ph-refresh-btn" class="btn btn--primary" type="button">Search</button>
     `;
 
@@ -547,12 +547,12 @@
 
     const localizedRiskNotes = selectLocalizedArray(data.riskNotes_i18n, data.riskNotes);
     const riskNotes = localizedRiskNotes.length
-      ? `<ul style="margin: 6px 0 0 18px; padding: 0;">${localizedRiskNotes.map((note) => `<li>${escapeHtml(note)}</li>`).join('')}</ul>`
+      ? `<ul class="advice-banner__list">${localizedRiskNotes.map((note) => `<li>${escapeHtml(note)}</li>`).join('')}</ul>`
       : `<span>${texts.noRiskNotes}</span>`;
 
     const fallbackNotice = fallbackFlags.length
-      ? `<div style="margin-top: 8px; font-size: 0.8125rem; opacity: 0.85;">${texts.deterministicNote} (${escapeHtml(fallbackFlags.join(', '))})</div>`
-      : `<div style="margin-top: 8px; font-size: 0.8125rem; opacity: 0.85;">${texts.deterministicNote}</div>`;
+      ? `<div class="advice-banner__fallback-note">${texts.deterministicNote} (${escapeHtml(fallbackFlags.join(', '))})</div>`
+      : `<div class="advice-banner__fallback-note">${texts.deterministicNote}</div>`;
     const retryState = getAdviceRetryState();
     const retryLine = retryState && retryState.active
       ? `<div class="retry-inline"><span class="badge badge--provider-warn">${escapeHtml(texts.isZh ? '即將重試 live' : 'Retrying live soon')}</span><span>${escapeHtml(texts.isZh ? `倒數 ${Math.ceil(retryState.remainingMs / 1000)} 秒` : `${Math.ceil(retryState.remainingMs / 1000)}s remaining`)}</span></div>`

@@ -161,6 +161,7 @@ if (devMockModule.isDevMock()) {
   console.log('[startup]    All /api/* calls return fixture data. Set DEV_MOCK=false to use real APIs.');
 } else {
   console.log('[startup] DEV_MOCK=false — real API routes active');
+  console.log('[startup]    Live provider mode is intended only for explicit API testing or production use.');
 }
 // ──────────────────────────────────────────────────────────────────────────────
 

@@ -450,3 +450,71 @@ That avoids executing `fli.exe` directly while still using the same official `fl
   - Mock: `⚠️  DEV_MOCK=true — serving mock data`
   - Real: `DEV_MOCK=false — real API routes active`
 - Do not debug "mock not working" without first verifying the server was restarted after the `.env` change.
+
+## 30. Make mock mode the default workflow, not just a remembered convention
+
+- For this repo, the intended operating rule is:
+  - **default development** → mock data
+  - **explicit API verification only** → live providers
+- Relying on developers to remember flipping `.env` is too fragile; the safer pattern is to encode the mode into npm scripts.
+- This repo now uses `scripts/run-server.js` to force startup mode:
+  - `npm run start` → `mock`
+  - `npm run dev` → `mock`
+  - `npm run start:live` → `live`
+  - `npm run dev:live` → `live`
+- `.env.example` now defaults to `DEV_MOCK=true` so a new machine starts in the safe quota-preserving mode.
+- Treat live mode as an exception path with intentional operator choice, not the ambient default.
+
+## 31. Use request-sequence guards anywhere tab switches can race network responses
+
+- If a panel can be refreshed repeatedly from:
+  - tab switches
+  - destination/date changes
+  - retries
+  - theme/language redraw side-effects
+  then stale async responses can easily paint older data back onto the screen.
+- Low-cost fix pattern:
+  ```js
+  let requestSequence = 0;
+
+  async function fetchSomething() {
+    const requestId = ++requestSequence;
+    const response = await fetch(url);
+    const data = await response.json();
+    if (requestId !== requestSequence) return;
+    render(data);
+  }
+  ```
+- This was applied to:
+  - dashboard metric fetch
+  - travelintel fetch
+  - trend chart fetch
+  - heatmap fetch
+- Use this pattern before adding more sophisticated cancellation logic; it is cheap, predictable, and sufficient for most vanilla-JS panel refresh races.
+
+## 32. If app-shell owns bootstrap, feature modules should not self-refresh on load
+
+- When both the app shell and a feature module trigger their own startup fetches, the result is:
+  - duplicate API calls
+  - duplicate skeleton flashes
+  - stale-response race risk
+  - avoidable quota burn
+- Preferred ownership rule:
+  - feature modules register APIs and local DOM bindings
+  - app shell decides when the first refresh happens
+- In this repo, dashboard self-refresh on `DOMContentLoaded` was removed so the app shell is the single source of truth for initial fetch timing.
+
+## 33. Accessibility fixes with the best ROI are shell semantics and focus management
+
+- Before polishing component visuals further, prioritize these structural fixes:
+  - main nav uses `role="tablist"`
+  - active tabs manage `aria-selected` + `tabindex`
+  - keyboard support for `ArrowLeft` / `ArrowRight` / `Home` / `End`
+  - toast container uses a live region
+  - modal uses `role="dialog"` + `aria-modal`
+  - modal traps focus and restores focus to the trigger on close
+- These changes are high-value because they improve:
+  - keyboard navigation
+  - screen-reader clarity
+  - regression resistance during future UI refactors
+- They are usually a better use of time than another round of purely cosmetic restyling.

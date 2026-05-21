@@ -125,6 +125,10 @@ body {
   min-height: 100vh;
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
 a {
   color: var(--color-primary-mid);
 }
@@ -142,6 +146,11 @@ textarea {
 
 button {
   color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.5);
+  outline-offset: 3px;
 }
 
 .container {
@@ -221,6 +230,7 @@ button {
 }
 
 .nav-btn, .theme-btn, .btn {
+  min-height: 44px;
   padding: 8px 18px;
   border-radius: var(--radius-btn);
   border: 1px solid var(--border-color);
@@ -425,6 +435,7 @@ button {
 .trip-search-bar input,
 .trip-search-bar select {
   flex: 1;
+  min-height: 44px;
   min-width: 120px;
   border: none;
   background: transparent;
@@ -492,5 +503,19 @@ button {
   .app-title,
   #dashboard-title {
     font-size: 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

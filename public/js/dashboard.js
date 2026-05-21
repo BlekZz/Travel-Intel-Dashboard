@@ -13,6 +13,8 @@
   let travelIntelRetryTimer = null;
   let travelIntelRetryDeadline = 0;
   let travelIntelRetryCount = 0;
+  let dashboardRequestSequence = 0;
+  let travelIntelRequestSequence = 0;
 
   function appApi() {
     return window.TravelIntel && window.TravelIntel.app ? window.TravelIntel.app : null;
@@ -593,6 +595,7 @@
   }
 
   async function fetchDashboardData(track) {
+    const requestId = ++dashboardRequestSequence;
     renderMetricsSkeleton();
     try {
       const params = new URLSearchParams({
@@ -602,6 +605,7 @@
       });
       const response = await fetch(`/api/dashboard?${params.toString()}`);
       const data = await response.json();
+      if (requestId !== dashboardRequestSequence) return;
       if (!response.ok) throw new Error(data.message || `Dashboard request failed (${response.status})`);
       latestDashboardData = data;
       renderMetrics(latestDashboardData);
@@ -609,6 +613,7 @@
       patchTrackingItem(track.id, { lastFetched: now });
       renderTracking();
     } catch (error) {
+      if (requestId !== dashboardRequestSequence) return;
       showToast(error.message || t('Failed to refresh dashboard', 'Dashboard 更新失敗'), 'error');
       if (latestDashboardData) {
         renderMetrics(latestDashboardData);
@@ -617,6 +622,7 @@
   }
 
   async function fetchTravelIntel(track, options = {}) {
+    const requestId = ++travelIntelRequestSequence;
     renderTravelIntelPanelSkeleton();
     const signature = buildTravelIntelSignature(track);
 
@@ -629,6 +635,7 @@
       });
       const response = await fetch(`/api/travelintel?${params.toString()}`);
       const data = await response.json();
+      if (requestId !== travelIntelRequestSequence) return;
       if (!response.ok) throw new Error(data.message || `travelintel request failed (${response.status})`);
 
       latestTravelIntelSignature = signature;
@@ -650,6 +657,7 @@
       });
       renderTracking();
     } catch (error) {
+      if (requestId !== travelIntelRequestSequence) return;
       showToast(error.message || t('travelintel analysis failed', 'travelintel 分析失敗'), 'error');
       if (latestTravelIntelResponse && latestTravelIntelSignature === signature) {
         renderTravelIntelMetric(latestTravelIntelResponse);
@@ -859,7 +867,6 @@
     bindSearchAction();
     renderMetricsSkeleton();
     renderTravelIntelPanelSkeleton();
-    refresh(active && active.destination ? active.destination : DEFAULT_DESTINATION, { forceTravelIntel: true });
   });
 
   document.addEventListener('langchange', redrawLanguage);

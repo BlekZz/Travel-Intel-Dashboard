@@ -24,7 +24,8 @@
     expandedIds: new Set(),
     requestStatus: 'idle',
     requestError: null,
-    lastAppliedDestination: ''
+    lastAppliedDestination: '',
+    lastFocusedBeforeModal: null
   };
 
   function getApp() {
@@ -101,27 +102,27 @@
 
     if (!document.getElementById('fs-form')) {
       const formMarkup = `
-        <div id="fs-shell" style="display:grid; gap:var(--spacing-md); margin-bottom:var(--spacing-md);">
+        <div id="fs-shell" class="fs-shell">
           <form id="fs-form" class="trip-search-bar trip-search-bar--compact" novalidate>
-            <input type="text" id="fs-origin" placeholder="${escapeHtml(t('Origin (e.g. TPE)', '出發地 (例：TPE)'))}" maxlength="3" value="${escapeHtml(DEFAULT_QUERY.origin)}" required>
+            <input type="text" id="fs-origin" placeholder="${escapeHtml(t('Origin (e.g. TPE)', '出發地 (例：TPE)'))}" maxlength="3" value="${escapeHtml(DEFAULT_QUERY.origin)}" aria-label="${escapeHtml(t('Origin airport code', '出發地機場代碼'))}" required>
             <div class="search-divider"></div>
-            <input type="text" id="fs-dest" placeholder="${escapeHtml(t('Destination (e.g. NRT)', '目的地 (例：NRT)'))}" maxlength="3" value="${escapeHtml(DEFAULT_QUERY.destination)}" required>
+            <input type="text" id="fs-dest" placeholder="${escapeHtml(t('Destination (e.g. NRT)', '目的地 (例：NRT)'))}" maxlength="3" value="${escapeHtml(DEFAULT_QUERY.destination)}" aria-label="${escapeHtml(t('Destination airport code', '目的地機場代碼'))}" required>
             <div class="search-divider"></div>
-            <input type="date" id="fs-date" value="${escapeHtml(getDefaultDate())}" required>
+            <input type="date" id="fs-date" value="${escapeHtml(getDefaultDate())}" aria-label="${escapeHtml(t('Departure date', '出發日期'))}" required>
             <div class="search-divider"></div>
-            <select id="fs-adults">
+            <select id="fs-adults" aria-label="${escapeHtml(t('Passengers', '旅客人數'))}">
               <option value="1">${escapeHtml(t('1 Adult', '1 位成人'))}</option>
               <option value="2">${escapeHtml(t('2 Adults', '2 位成人'))}</option>
               <option value="3">${escapeHtml(t('3 Adults', '3 位成人'))}</option>
             </select>
             <div class="search-divider"></div>
-            <select id="fs-cabin">
+            <select id="fs-cabin" aria-label="${escapeHtml(t('Cabin class', '艙等'))}">
               <option value="economy">${escapeHtml(t('Economy', '經濟艙'))}</option>
               <option value="premium_economy">${escapeHtml(t('Premium Economy', '豪華經濟艙'))}</option>
               <option value="business">${escapeHtml(t('Business', '商務艙'))}</option>
             </select>
             <div class="search-divider"></div>
-            <select id="fs-max-stops">
+            <select id="fs-max-stops" aria-label="${escapeHtml(t('Maximum stops', '最大轉機次數'))}">
               <option value="">${escapeHtml(t('Any Stops', '不限轉機'))}</option>
               <option value="0">${escapeHtml(t('Direct Only', '僅直飛'))}</option>
               <option value="1">${escapeHtml(t('Up to 1 Stop', '最多 1 次轉機'))}</option>
@@ -130,25 +131,25 @@
             <button type="submit" class="btn btn--primary">${escapeHtml(t('Search Flights', '搜尋航班'))}</button>
           </form>
 
-          <div style="display:flex; flex-wrap:wrap; gap:var(--spacing-sm); align-items:center; justify-content:space-between;">
-            <div style="display:flex; flex-wrap:wrap; gap:var(--spacing-md);">
+          <div class="fs-toolbar">
+            <div class="fs-filter-row">
               <button type="button" class="filter-chip badge" id="flt-direct" data-filter-chip="direct" aria-pressed="false">${escapeHtml(t('Direct', '直飛'))}</button>
               <button type="button" class="filter-chip badge" id="flt-budget" data-filter-chip="budget" aria-pressed="false">${escapeHtml(t('Budget', '廉航'))}</button>
               <button type="button" class="filter-chip badge" id="flt-baggage" data-filter-chip="baggage" aria-pressed="false">${escapeHtml(t('With Baggage', '含行李'))}</button>
             </div>
-            <div style="display:grid; gap:4px; justify-items:end;">
-              <div id="fs-summary" style="font-size:0.875rem; color:var(--color-text-secondary);"></div>
+            <div class="fs-summary-block">
+              <div id="fs-summary" class="fs-summary"></div>
               <div id="fs-meta" class="provider-meta"></div>
               <div class="subtle-note" title="${escapeHtml(t('Repeated refreshes can consume SerpApi free searches quickly. Cached identical queries are cheaper and safer.', '頻繁刷新會快速消耗 SerpApi 免費額度。相同查詢優先吃快取會更安全。'))}">${escapeHtml(t('Tip: avoid repeated refreshes. Cached identical searches are safer for quota.', '提示：請避免頻繁刷新；相同查詢優先走快取比較安全。'))}</div>
             </div>
           </div>
 
-          <div id="fs-sortbar" style="display:grid; grid-template-columns:72px minmax(170px,1.3fr) minmax(160px,1fr) minmax(140px,0.9fr) minmax(120px,0.8fr) minmax(140px,0.9fr); gap:var(--spacing-sm); align-items:center; padding:var(--spacing-sm) var(--spacing-md); border-radius:var(--radius-card); background:var(--color-surface); color:var(--color-text-secondary); font-size:0.875rem; font-weight:600;">
+          <div id="fs-sortbar" class="fs-sortbar">
             <div>${escapeHtml(t('Compare', '比較'))}</div>
-            <button type="button" data-fs-sort="airline" style="all:unset; cursor:pointer;">${escapeHtml(t('Airline', '航空公司'))}</button>
-            <button type="button" data-fs-sort="departureTime" style="all:unset; cursor:pointer;">${escapeHtml(t('Time', '時間'))}</button>
-            <button type="button" data-fs-sort="durationMinutes" style="all:unset; cursor:pointer;">${escapeHtml(t('Duration', '時長'))}</button>
-            <button type="button" data-fs-sort="price" style="all:unset; cursor:pointer;">${escapeHtml(t('Price', '價格'))}</button>
+            <button type="button" class="fs-sortbar__button" data-fs-sort="airline">${escapeHtml(t('Airline', '航空公司'))}</button>
+            <button type="button" class="fs-sortbar__button" data-fs-sort="departureTime">${escapeHtml(t('Time', '時間'))}</button>
+            <button type="button" class="fs-sortbar__button" data-fs-sort="durationMinutes">${escapeHtml(t('Duration', '時長'))}</button>
+            <button type="button" class="fs-sortbar__button" data-fs-sort="price">${escapeHtml(t('Price', '價格'))}</button>
             <div>${escapeHtml(t('AI Last-Min', 'AI 晚鳥估價'))}</div>
           </div>
         </div>
@@ -161,15 +162,15 @@
       document.body.insertAdjacentHTML(
         'beforeend',
         `
-          <div id="compare-modal-wrapper" class="compare-modal" hidden>
+          <div id="compare-modal-wrapper" class="compare-modal" role="dialog" aria-modal="true" aria-labelledby="compare-title" aria-describedby="compare-description" hidden>
             <div class="compare-modal__overlay"></div>
-            <div class="compare-modal__content" style="position:relative; max-width:min(1100px, calc(100vw - 32px)); max-height:calc(100vh - 64px); overflow:auto; display:grid; gap:var(--spacing-md);">
-              <button type="button" id="compare-close" class="btn" style="position:absolute; top:12px; right:12px;">${escapeHtml(t('Close', '關閉'))}</button>
-              <div style="padding-right:80px;">
-                <h3 style="margin:0 0 var(--spacing-sm);">${escapeHtml(t('Flight Comparison', '航班比較'))}</h3>
-                <p style="margin:0; color:var(--color-text-secondary); font-size:0.875rem;">${escapeHtml(t('Compare up to 3 selected flights.', '最多比較 3 筆已選航班。'))}</p>
+            <div class="compare-modal__content compare-modal__content--wide">
+              <button type="button" id="compare-close" class="btn compare-modal__close">${escapeHtml(t('Close', '關閉'))}</button>
+              <div class="compare-modal__intro">
+                <h3 id="compare-title" class="compare-modal__title">${escapeHtml(t('Flight Comparison', '航班比較'))}</h3>
+                <p id="compare-description" class="compare-modal__description">${escapeHtml(t('Compare up to 3 selected flights.', '最多比較 3 筆已選航班。'))}</p>
               </div>
-              <div id="compare-body" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:var(--spacing-md);"></div>
+              <div id="compare-body" class="compare-grid"></div>
             </div>
           </div>
         `
@@ -268,6 +269,11 @@
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape') {
         closeCompareModal();
+        return;
+      }
+
+      if (event.key === 'Tab' && !elements.modal?.hasAttribute('hidden')) {
+        trapModalFocus(event);
       }
     });
 
@@ -291,6 +297,10 @@
     }
 
     bindEvents();
+    const results = document.getElementById('flight-results');
+    if (results) {
+      results.addEventListener('keydown', handleRowKeydown);
+    }
     state.currentQuery.departureDate = document.getElementById('fs-date')?.value || getDefaultDate();
     state.initialized = true;
     applyStaticLanguage();
@@ -389,6 +399,18 @@
     }
 
     syncCompareButton();
+  }
+
+  function handleRowKeydown(event) {
+    const row = event.target.closest('.flight-row');
+    if (!row || event.target.closest('button, a, input, label')) {
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      row.click();
+    }
   }
 
   function syncCompareButton() {
@@ -610,7 +632,7 @@
       }
 
       elements.results.innerHTML = Array.from({ length: 5 }, function () {
-        return '<div class="skeleton skeleton--row" style="height:88px; border-radius:var(--radius-card);"></div>';
+        return '<div class="skeleton skeleton--row skeleton--row-tall"></div>';
       }).join('');
       return;
     }
@@ -687,7 +709,8 @@
       const active = key === state.sortKey;
       const arrow = active ? (state.sortDirection === 'asc' ? ' ↑' : ' ↓') : '';
       button.textContent = `${labels[key] || key}${arrow}`;
-      button.style.color = active ? 'var(--color-primary)' : 'inherit';
+      button.setAttribute('aria-sort', active ? (state.sortDirection === 'asc' ? 'ascending' : 'descending') : 'none');
+      button.classList.toggle('fs-sortbar__button--active', active);
     });
   }
 
@@ -898,63 +921,63 @@
     const seats = Number.isFinite(flight.seatsRemaining) ? String(flight.seatsRemaining) : t('Unknown', '未知');
 
     return `
-      <div class="flight-row ${expanded ? 'flight-row--expanded' : ''}" data-flight-id="${escapeHtml(flight.id)}" style="display:grid; gap:var(--spacing-sm); padding:var(--spacing-md); margin-bottom:var(--spacing-sm); border-radius:var(--radius-card); cursor:pointer;">
-        <div style="display:grid; grid-template-columns:72px minmax(170px,1.3fr) minmax(160px,1fr) minmax(140px,0.9fr) minmax(120px,0.8fr) minmax(140px,0.9fr); gap:var(--spacing-sm); align-items:center;">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+      <div class="flight-row ${expanded ? 'flight-row--expanded' : ''}" data-flight-id="${escapeHtml(flight.id)}" tabindex="0" role="button" aria-expanded="${expanded ? 'true' : 'false'}">
+        <div class="flight-row__summary">
+          <label class="flight-row__pick">
             <input type="checkbox" class="compare-chk" data-id="${escapeHtml(flight.id)}" ${checked ? 'checked' : ''}>
-            <span style="font-size:0.75rem; color:var(--color-text-secondary);">${escapeHtml(t('Pick', '選取'))}</span>
+            <span class="flight-row__hint">${escapeHtml(t('Pick', '選取'))}</span>
           </label>
           <div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="flight-row__airline">
               <strong>${escapeHtml(flight.airline)}</strong>
               <span class="badge ${flight.type === 'budget' ? 'badge--ai-warn' : 'badge--ai'}">${escapeHtml(renderFlightType(flight.type))}</span>
             </div>
-            <div style="font-size:0.875rem; color:var(--color-text-secondary); margin-top:4px;">${escapeHtml(`${flight.airlineCode} ${flight.flightNumber}`.trim())}</div>
+            <div class="flight-row__meta">${escapeHtml(`${flight.airlineCode} ${flight.flightNumber}`.trim())}</div>
           </div>
           <div>
             <div><strong>${escapeHtml(formatTime(flight.departureTime))}</strong> → <strong>${escapeHtml(formatTime(flight.arrivalTime))}</strong></div>
-            <div style="font-size:0.875rem; color:var(--color-text-secondary); margin-top:4px;">${escapeHtml(stopSummary)}</div>
+            <div class="flight-row__meta">${escapeHtml(stopSummary)}</div>
           </div>
           <div>
             <strong>${escapeHtml(flight.duration || '--')}</strong>
-            <div style="font-size:0.875rem; color:var(--color-text-secondary); margin-top:4px;">${escapeHtml(stopCities)}</div>
+            <div class="flight-row__meta">${escapeHtml(stopCities)}</div>
           </div>
           <div>
-            <strong style="color:var(--color-accent);">${escapeHtml(priceText)}</strong>
-            <div style="font-size:0.875rem; color:var(--color-text-secondary); margin-top:4px;">${escapeHtml(baggage)}</div>
+            <strong class="flight-row__price">${escapeHtml(priceText)}</strong>
+            <div class="flight-row__meta">${escapeHtml(baggage)}</div>
           </div>
           <div title="${escapeHtml(t('AI estimate, reference only.', 'AI 估算，僅供參考。'))}">
             <strong>${escapeHtml(aiText)}</strong>
-            <div style="display:flex; align-items:center; gap:6px; margin-top:4px; flex-wrap:wrap;">
+            <div class="flight-row__ai">
               <span class="badge badge--ai-warn">⚠ AI</span>
-              <span style="font-size:0.75rem; color:var(--color-text-secondary);">${escapeHtml(t('Reference only', '僅供參考'))}</span>
+              <span class="flight-row__hint">${escapeHtml(t('Reference only', '僅供參考'))}</span>
             </div>
           </div>
         </div>
-        <div class="flight-row__detail" ${expanded ? '' : 'hidden'} style="display:${expanded ? 'grid' : 'none'}; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:var(--spacing-md); border-top:1px dashed rgba(0,0,0,0.12); padding-top:var(--spacing-md);">
-          <div>
-            <div style="font-size:0.75rem; color:var(--color-text-secondary);">${escapeHtml(t('Cabin', '艙等'))}</div>
-            <div style="margin-top:4px; font-weight:600;">${escapeHtml(renderCabin(flight.cabin))}</div>
+        <div class="flight-row__detail ${expanded ? 'flight-row__detail--open' : ''}" ${expanded ? '' : 'hidden'}>
+          <div class="flight-row__detail-item">
+            <div class="flight-row__detail-label">${escapeHtml(t('Cabin', '艙等'))}</div>
+            <div class="flight-row__detail-value">${escapeHtml(renderCabin(flight.cabin))}</div>
           </div>
-          <div>
-            <div style="font-size:0.75rem; color:var(--color-text-secondary);">${escapeHtml(t('Stops / Layovers', '轉機 / 經停'))}</div>
-            <div style="margin-top:4px; font-weight:600;">${escapeHtml(stopCities)}</div>
+          <div class="flight-row__detail-item">
+            <div class="flight-row__detail-label">${escapeHtml(t('Stops / Layovers', '轉機 / 經停'))}</div>
+            <div class="flight-row__detail-value">${escapeHtml(stopCities)}</div>
           </div>
-          <div>
-            <div style="font-size:0.75rem; color:var(--color-text-secondary);">${escapeHtml(t('Seats Remaining', '剩餘機位'))}</div>
-            <div style="margin-top:4px; font-weight:600;">${escapeHtml(seats)}</div>
+          <div class="flight-row__detail-item">
+            <div class="flight-row__detail-label">${escapeHtml(t('Seats Remaining', '剩餘機位'))}</div>
+            <div class="flight-row__detail-value">${escapeHtml(seats)}</div>
           </div>
-          <div>
-            <div style="font-size:0.75rem; color:var(--color-text-secondary);">${escapeHtml(t('Baggage Policy', '行李政策'))}</div>
-            <div style="margin-top:4px; font-weight:600;">${escapeHtml(baggage)}</div>
+          <div class="flight-row__detail-item">
+            <div class="flight-row__detail-label">${escapeHtml(t('Baggage Policy', '行李政策'))}</div>
+            <div class="flight-row__detail-value">${escapeHtml(baggage)}</div>
           </div>
-          <div>
-            <div style="font-size:0.75rem; color:var(--color-text-secondary);">${escapeHtml(t('Aircraft / Equipment', '機型 / 設備'))}</div>
-            <div style="margin-top:4px; font-weight:600;">${escapeHtml(renderAircraftLabel(flight))}</div>
+          <div class="flight-row__detail-item">
+            <div class="flight-row__detail-label">${escapeHtml(t('Aircraft / Equipment', '機型 / 設備'))}</div>
+            <div class="flight-row__detail-value">${escapeHtml(renderAircraftLabel(flight))}</div>
           </div>
-          <div>
-            <div style="font-size:0.75rem; color:var(--color-text-secondary);">${escapeHtml(t('Wait Time', '候機時間'))}</div>
-            <div style="margin-top:4px; font-weight:600;">${escapeHtml(renderLayoverDuration(flight))}</div>
+          <div class="flight-row__detail-item">
+            <div class="flight-row__detail-label">${escapeHtml(t('Wait Time', '候機時間'))}</div>
+            <div class="flight-row__detail-value">${escapeHtml(renderLayoverDuration(flight))}</div>
           </div>
         </div>
       </div>
@@ -1009,6 +1032,7 @@
   function openCompareModal() {
     const modal = document.getElementById('compare-modal-wrapper');
     const body = document.getElementById('compare-body');
+    const closeButton = document.getElementById('compare-close');
     if (!modal || !body) {
       return;
     }
@@ -1026,12 +1050,13 @@
       return;
     }
 
+    state.lastFocusedBeforeModal = document.activeElement;
     body.innerHTML = selectedFlights.map(function (flight) {
       return `
-        <section style="border:1px solid rgba(0,0,0,0.12); border-radius:var(--radius-card); padding:var(--spacing-md); display:grid; gap:var(--spacing-sm); background:var(--color-surface);">
+        <section class="compare-card">
           <div>
-            <h4 style="margin:0;">${escapeHtml(flight.airline)}</h4>
-            <p style="margin:4px 0 0; color:var(--color-text-secondary);">${escapeHtml(`${flight.airlineCode} ${flight.flightNumber}`.trim())}</p>
+            <h4 class="compare-card__title">${escapeHtml(flight.airline)}</h4>
+            <p class="compare-card__subtitle">${escapeHtml(`${flight.airlineCode} ${flight.flightNumber}`.trim())}</p>
           </div>
           <div><strong>${escapeHtml(t('Price', '價格'))}:</strong> ${escapeHtml(`${flight.currency === 'TWD' ? 'NT$' : `${flight.currency} `}${flight.price.toLocaleString()}`)}</div>
           <div><strong>${escapeHtml(t('AI Last-Min', 'AI 晚鳥估價'))}:</strong> ${escapeHtml(`${flight.currency === 'TWD' ? 'NT$' : `${flight.currency} `}${flight.aiEstimate.toLocaleString()}`)}</div>
@@ -1045,12 +1070,40 @@
     }).join('');
 
     modal.removeAttribute('hidden');
+    document.body.classList.add('modal-open');
+    if (closeButton) {
+      closeButton.focus();
+    }
   }
 
   function closeCompareModal() {
     const modal = document.getElementById('compare-modal-wrapper');
     if (modal) {
       modal.setAttribute('hidden', '');
+    }
+    document.body.classList.remove('modal-open');
+    if (state.lastFocusedBeforeModal && typeof state.lastFocusedBeforeModal.focus === 'function') {
+      state.lastFocusedBeforeModal.focus();
+    }
+    state.lastFocusedBeforeModal = null;
+  }
+
+  function trapModalFocus(event) {
+    const modal = document.getElementById('compare-modal-wrapper');
+    if (!modal) return;
+
+    const focusable = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (!focusable.length) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   }
 

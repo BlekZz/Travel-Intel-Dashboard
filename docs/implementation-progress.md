@@ -1,6 +1,6 @@
 # Travel Intel Dashboard Implementation Progress
 
-Last updated: 2026-05-20 (Session 2 — UI Redesign & Stabilization)
+Last updated: 2026-05-21 (Session 3 — Stability Hardening + Mock-First Workflow)
 
 ## Completed Work
 
@@ -279,6 +279,62 @@ A comprehensive premium UI/UX overhaul was applied to all three tabs. All items 
 - **Mock Mode** (`DEV_MOCK=true`): Two fixture datasets (mock-A Tokyo summer peak, mock-B Tokyo winter off-peak) covering all `/api/*` endpoints. Zero API quota consumed during UI development.
 - **knowhow.md**: 3 new entries (#27 height-lock CLS pattern, #28 AI card sorting, #29 DEV_MOCK nodemon restart workflow).
 
+## Stability Hardening + Mock-First Workflow — 2026-05-21
+
+This session focused on lowering regression risk without adding new product features.
+
+### Frontend Stability / Accessibility
+- Added request-sequence guards to dashboard and chart refresh paths so stale async responses no longer overwrite newer destination/date state.
+- Removed duplicate dashboard self-boot refresh so app-shell startup owns the initial fetch lifecycle.
+- Upgraded shell accessibility:
+  - tablist semantics on the main nav
+  - keyboard navigation for tabs (`ArrowLeft`, `ArrowRight`, `Home`, `End`)
+  - toast live-region roles
+  - visible focus styles
+  - 44px minimum touch target sizing on primary controls
+  - reduced-motion handling for shell / cards / toast / animated UI
+- Upgraded flight-search interaction semantics:
+  - keyboard-expandable flight rows (`Enter` / `Space`)
+  - compare modal `role="dialog"` + `aria-modal`
+  - focus trap inside modal
+  - focus restoration after modal close
+  - background scroll lock while modal is open
+
+### UI Structure Cleanup
+- Moved several high-noise inline layout fragments out of `flightSearch.js` and into reusable CSS classes:
+  - search toolbar
+  - summary block
+  - sort bar
+  - flight row summary / detail layouts
+  - compare modal intro / card grid
+- Reduced remaining inline presentation in `priceHistory.js` by converting fallback note and risk-list styling into component classes.
+- Added dedicated utility classes for taller skeleton rows and active sort-button styling.
+
+### Verification
+- `node --check` passed for:
+  - `public/js/app.js`
+  - `public/js/dashboard.js`
+  - `public/js/charts.js`
+  - `public/js/flightSearch.js`
+  - `public/js/priceHistory.js`
+  - `scripts/run-server.js`
+- Local smoke on `http://localhost:3000/` returned `200` for:
+  - `/`
+  - `/api/dashboard`
+  - `/api/flights`
+  - `/api/price-history`
+- Browser automation was attempted for a richer UI smoke, but the current bundled runtime was missing a complete Playwright dependency chain (`playwright-core`), so validation stayed at syntax + HTTP smoke level for this environment.
+
+### Mock-First Development Workflow
+- Added `scripts/run-server.js` so startup mode is explicit and does not rely on remembering to flip `.env` manually.
+- Default scripts now prefer mock mode:
+  - `npm run start` → mock
+  - `npm run dev` → mock
+  - `npm run start:live` / `npm run dev:live` → explicit live-provider mode
+- `.env.example` now defaults to `DEV_MOCK=true` to match the intended workflow:
+  - UI/CSS work, local interaction polish, and most non-API scenarios use mock data
+  - only explicit API validation and production usage should use live mode
+
 ---
 
 ## Current Backlog / Next Steps
@@ -294,6 +350,7 @@ A comprehensive premium UI/UX overhaul was applied to all three tabs. All items 
 - ⬜ **Price-history 垂直成長 regression**：在多次 tab 切換和 scroll 場景中再次確認 chart 高度未持續累積增長。
 - ⬜ **operator status summary**：在 Gemini 相關 UI 面板加入 fresh live / cached live / cooldown fallback / deterministic fallback 的狀態標示。
 - ⬜ **Release smoke test**：在 mock 驗證完成後，以低頻率對 real API 路徑執行最終端到端 smoke（避免消耗配額）。
+- ⬜ **Charts inline-style debt**：`charts.js` 仍有較多 DOM-driven inline styling；若再進一步整理，優先抽 popover / heatmap control / cell decoration class，但這已經屬於較低 CP 的結構清理。
 
 ### Low Priority / Nice to Have
 - ⬜ **Quota bar refinement**：依實際 Gemini free-tier 限制動態調整 quota bar 警示閾值。

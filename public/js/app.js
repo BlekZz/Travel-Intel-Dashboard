@@ -46,6 +46,7 @@
 
     const toast = document.createElement('div');
     toast.className = `toast toast--${type}`;
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
     toast.textContent = message;
     container.appendChild(toast);
 
@@ -295,6 +296,7 @@
 
       const isActive = tab.id === targetTabId;
       navEl.setAttribute('aria-selected', String(isActive));
+      navEl.setAttribute('tabindex', isActive ? '0' : '-1');
       navEl.classList.toggle('active', isActive);
 
       if (isActive) {
@@ -317,6 +319,19 @@
 
     if (shouldRefresh) {
       refreshTabModules(activeTabId);
+    }
+  }
+
+  function moveTabFocus(currentTabId, direction) {
+    const currentIndex = tabs.findIndex((tab) => tab.id === currentTabId);
+    if (currentIndex < 0) return;
+
+    const nextIndex = (currentIndex + direction + tabs.length) % tabs.length;
+    const nextTab = tabs[nextIndex];
+    const nextNav = document.getElementById(nextTab.navId);
+    switchTab(nextTab.id);
+    if (nextNav) {
+      nextNav.focus();
     }
   }
 
@@ -500,6 +515,24 @@
 
       navEl.addEventListener('click', () => {
         switchTab(tab.id);
+      });
+      navEl.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          moveTabFocus(tab.id, 1);
+        } else if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          moveTabFocus(tab.id, -1);
+        } else if (event.key === 'Home') {
+          event.preventDefault();
+          switchTab(tabs[0].id);
+          document.getElementById(tabs[0].navId)?.focus();
+        } else if (event.key === 'End') {
+          event.preventDefault();
+          const lastTab = tabs[tabs.length - 1];
+          switchTab(lastTab.id);
+          document.getElementById(lastTab.navId)?.focus();
+        }
       });
     });
 

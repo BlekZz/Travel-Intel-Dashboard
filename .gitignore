@@ -1,2 +1,5 @@
 .env
 node_modules/
+.claude/
+tmp/
+tmp_fli_waveb_sample.json
